@@ -71,9 +71,11 @@ reduceCharacterMatch acc has2LettersSame has3LettersSame =
 
 
 -- [['n'],['v','v'],['o'],['s'],['v','v'],['k'],['c'],['i','i'],['t'],['d'],['b'],['f'],['i','i'],['y'],['x'],['u'],['p'],['h'],['z'],['g'],['e'],['r','r'],['a'],['r','r'],['j'],['q']]
+-- [['v','v'],['v','v'],['i','i'],['i','i'],['r','r'],['r','r']]
 checkPartitionLol charList =
     map (\char -> partition (\letter -> letter == char) charList) charList
     |> map (\item -> first item)
+    |> filter (\list -> length list == 2 || length list == 3)
     -- |> map length
     -- |> filter (\item -> item == 2 || item == 3)
     -- |> foldl (\item acc ->
