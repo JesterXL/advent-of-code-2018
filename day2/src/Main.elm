@@ -198,19 +198,31 @@ incrementDictValue dict key =
 
 count2And3CharactersInChecksum : List Char -> CharacterMatch
 count2And3CharactersInChecksum checksumCharList =
-    filterOutSameLetters checksumCharList
-    |> List.foldl (\matchList foundDict -> incrementDictValue foundDict (getFirstLetterOrNoClue matchList)) Dict.empty
-    |> Dict.foldl (\charKey charCount charMatch ->
-        if charCount == 2 then
-            { charMatch | char2 = charMatch.char2 + 1}
-        else if charCount == 3 then
-            { charMatch | char3 = charMatch.char3 + 1}
-        else
-            charMatch) (CharacterMatch 0 0)
+    let
+        filterOutSameLettersResult = filterOutSameLetters checksumCharList
+        -- m1 = log "filterOutSameLettersResult" filterOutSameLettersResult
+        combinedDict = List.foldl (\matchList foundDict -> incrementDictValue foundDict (getFirstLetterOrNoClue matchList)) Dict.empty filterOutSameLettersResult
+        -- m2 = log "combinedDict" combinedDict
+        datMatches = Dict.foldl (\charKey charCount charMatch ->
+                if charCount == 2 then
+                    { charMatch | char2 = 1}
+                else if charCount == 3 then
+                    { charMatch | char3 = 1}
+                -- Leaving this out because it has to be EXACTLY twice or EXACTLY three times, not 4 which could be wrongly interpretted as twice
+                -- else if charCount == 4 then 
+                --     { charMatch | char2 = 1}
+                else
+                    let
+                        wat = log "not 2 or 3 or 4" charCount
+                    in
+                        charMatch) (CharacterMatch 0 0) combinedDict
+        -- m3 = log "datMatches" datMatches
+    in
+        datMatches
 
 combineCharacterMatches : List CharacterMatch -> CharacterMatch
 combineCharacterMatches characterMatches =
-    List.foldl (\match acc -> { acc | char2 = acc.char2 + match.char2, char3 = match.char3 }) (CharacterMatch 0 0) characterMatches
+    List.foldl (\match acc -> { acc | char2 = acc.char2 + match.char2, char3 = acc.char3 + match.char3 }) (CharacterMatch 0 0) characterMatches
 
 update : Msg -> Model -> Model
 update msg model =
@@ -219,6 +231,10 @@ update msg model =
             let
                 -- Attempt #1: The checksum 85272 is too damn high!
                 -- Attempt #2: The checksum 646 is too low, like my self-esteem in this language.
+                -- Attempt #3: 647 is too low
+                -- Attempt #4: 14234 is not correct
+                -- Attempt #5: 5412 is not correct
+                -- Attempt #6: OH YEAH BABY! 5390
                 -- charTotal = 
                 --     List.take 10 (split "\n" checksums)
                 --     |> List.map toList
@@ -242,6 +258,7 @@ update msg model =
                     |> List.map sortCharsAlphabetical
                     |> List.map count2And3CharactersInChecksum
                     |> combineCharacterMatches
+                    |> calculateChecksum
 
                 um = log "charTotal" charTotal
             in
