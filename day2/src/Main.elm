@@ -312,7 +312,7 @@ view model =
     div []
         [ div [ class "demo-card-wide mdl-card mdl-shadow--2dp" ]
             [ div [ class "mdl-card__title" ]
-                [ h2 [ class "mdl-card__title-text" ] [ text "Frequency Parser" ]
+                [ h2 [ class "mdl-card__title-text" ] [ text "Checksum Parser" ]
                 ]
             , div [ class "mdl-card__supporting-text" ] [ text "1. click 'Load Cached'", br [] [], text "2. click 'Parse Checksums'" ]
             , form [ action "#" ]
