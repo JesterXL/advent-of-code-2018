@@ -6,6 +6,8 @@
     Twitter: twitter.com/jesterxl
     YouTube: youtube.com/jessewarden
 
+    https://adventofcode.com/2018/day/1
+
 -}
 module Main exposing (main)
 
