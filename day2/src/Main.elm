@@ -2,8 +2,10 @@ module Main exposing (main)
 
 import Browser
 import Debug exposing (log)
-import Html exposing (Html, button, div, text)
+import Html exposing (Html, button, div, text, textarea, input, label, form, h2, i, a, br)
 import Html.Events exposing (onClick)
+import Html.Attributes exposing (class, type_, rows, for, action, style, placeholder, required )
+import Html.Events exposing (onInput)
 import List exposing (foldl, length, partition, map, filter, head, reverse)
 import String exposing (split, toList)
 import Tuple exposing (first, pair)
@@ -11,21 +13,26 @@ import Dict exposing (Dict)
 import Maybe exposing (withDefault)
 import Set exposing (Set, insert, empty)
 import Char exposing (toCode, fromCode)
+import Array exposing (Array)
 
 
 type alias Model =
-    { count : Int }
+    { checksumText : String
+    , characterCount : Int
+    , matchedChecksumCharacters : String }
+
 
 
 initialModel : Model
 initialModel =
-    { count = 0 }
-
+    { checksumText = ""
+    , characterCount = 0
+    , matchedChecksumCharacters = "" }
 
 type Msg
-    = Increment
-    | Decrement
-
+    = InputChecksumsText String
+    | ParseChecksumsText
+    | LoadFromCache
 
 type alias CharacterMatch =
     { char2 : Int
@@ -213,7 +220,8 @@ count2And3CharactersInChecksum checksumCharList =
                 --     { charMatch | char2 = 1}
                 else
                     let
-                        wat = log "not 2 or 3 or 4" charCount
+                        -- wat = log "not 2 or 3 or 4" charCount
+                        wat = "not logging right meow"
                     in
                         charMatch) (CharacterMatch 0 0) combinedDict
         -- m3 = log "datMatches" datMatches
@@ -224,55 +232,170 @@ combineCharacterMatches : List CharacterMatch -> CharacterMatch
 combineCharacterMatches characterMatches =
     List.foldl (\match acc -> { acc | char2 = acc.char2 + match.char2, char3 = acc.char3 + match.char3 }) (CharacterMatch 0 0) characterMatches
 
+
+-- Challenge 2 Functions
+
+type alias CharsMatch = 
+    { char: Char
+    , match : Bool }
+
+type alias ChecksumAlmostMatch =
+    { firstArray : Array Char
+    , secondArray : Array Char
+    , empty : Bool
+    , matchCount : Int
+    , matchedCharacters : String }
+
+compare2ArraysChars firstArray secondArray =
+    let
+        matches = Array.indexedMap (\charIndex _ ->
+            let
+                firstChar = Maybe.withDefault '?' (Array.get charIndex firstArray)
+                secondChar = Maybe.withDefault '?' (Array.get charIndex secondArray)
+                charsMatch = firstChar == secondChar
+                -- m00 = log "firstChar" firstChar
+                -- m11 = log "secondChar" secondChar
+                -- m22 = log "equals" charsMatch
+            in
+                CharsMatch firstChar charsMatch) firstArray
+        filteredMatches = Array.filter (\item -> item.match == True) matches
+        -- m1 = log "Array.length filteredMatches" (Array.length filteredMatches)
+        matchCount = Array.length filteredMatches
+        matchedCharacters =
+            Array.map (\charsMatch -> charsMatch.char) filteredMatches
+            |> Array.toList
+            |> String.fromList
+    in
+        if matchCount == checksumLength - 1 then
+            ChecksumAlmostMatch firstArray secondArray False matchCount matchedCharacters
+        -- take out exact matches
+        else if matchCount == checksumLength then
+            ChecksumAlmostMatch Array.empty Array.empty True matchCount matchedCharacters
+        else
+            ChecksumAlmostMatch Array.empty Array.empty True matchCount matchedCharacters
+
+compare2Arrays charList arrayOfCharLists =
+    let
+        matches = Array.map (compare2ArraysChars charList) arrayOfCharLists
+        nonEmptyMatches = Array.filter (\match -> match.empty == False) matches
+    in
+        nonEmptyMatches
+
+parseChecksums : Array (Array Char)
+parseChecksums =
+    split "\n" checksums
+    |> List.map toList
+    |> List.map Array.fromList
+    |> Array.fromList
+
+
+
 update : Msg -> Model -> Model
 update msg model =
     case msg of
-        Increment ->
+        InputChecksumsText text ->
+            { model | checksumText = text }
+
+        LoadFromCache ->
+            { model | checksumText = checksums }
+        
+        ParseChecksumsText ->
             let
+                -- Challenge 1
                 -- Attempt #1: The checksum 85272 is too damn high!
                 -- Attempt #2: The checksum 646 is too low, like my self-esteem in this language.
                 -- Attempt #3: 647 is too low
                 -- Attempt #4: 14234 is not correct
                 -- Attempt #5: 5412 is not correct
                 -- Attempt #6: OH YEAH BABY! 5390
-                -- charTotal = 
-                --     List.take 10 (split "\n" checksums)
-                --     |> List.map toList
-                --     |> List.map sortCharsAlphabetical
-                --     |> List.head
-                --     |> Maybe.withDefault []
-                --     |> filterOutSameLetters
-                --     -- |> List.foldl (\matchList foundSet -> Set.insert (getFirstLetterOrNoClue matchList) foundSet) Set.empty
-                --     |> List.foldl (\matchList foundDict -> incrementDictValue foundDict (getFirstLetterOrNoClue matchList)) Dict.empty
-                --     |> Dict.foldl (\charKey charCount charMatch ->
-                --         if charCount == 2 then
-                --             { charMatch | char2 = charMatch.char2 + 1}
-                --         else if charCount == 3 then
-                --             { charMatch | char3 = charMatch.char3 + 1}
-                --         else
-                --             charMatch) (CharacterMatch 0 0)
+
+                -- Challenge 2
+                -- Attemp #1: "nvosmkcdtdbfhyxsphzgraljq", OH YEAH, FIRST TRY, WHAT'S UP WHAT'S UP
+                
                 charTotal =
                     -- List.take 10 (split "\n" checksums)
                     split "\n" checksums
                     |> List.map toList
-                    |> List.map sortCharsAlphabetical
+                    -- |> List.map sortCharsAlphabetical
                     |> List.map count2And3CharactersInChecksum
                     |> combineCharacterMatches
                     |> calculateChecksum
-
+                
                 um = log "charTotal" charTotal
-            in
-            { model | count = model.count + 1 }
+                
 
-        Decrement ->
-            { model | count = model.count - 1 }
+                
+
+                commonChars =
+                    parseChecksums
+                    -- List.take 10 (split "\n" checksums)
+                
+                originalChecksums =
+                    parseChecksums
+
+                -- compareTestResults = compare2ArraysChars (Array.fromList ['a', 'b', 'c']) (Array.fromList ['a', 'd', 'c'])
+                -- compareTestResultsLog = log "compareTestResults" compareTestResults
+                
+                allMatches = Array.map (\currentCharList ->
+                    compare2Arrays currentCharList originalChecksums) parseChecksums
+                -- um2 = log "allMatches" allMatches
+
+                -- [
+                --     [
+                --         { empty = False, firstArray = ['n','v','o','s','m','k','c','d','t','d','b','f','h','y','x','s','p','h','z','g','r','r','a','l','j','q'], matchCount = 25, matchedCharacters = "nvosmkcdtdbfhyxsphzgraljq", secondArray = Array.fromList ['n','v','o','s','m','k','c','d','t','d','b','f','h','y','x','s','p','h','z','g','e','r','a','l','j','q'] }
+                --     ],
+                --     [
+                --         { empty = False, firstArray = Array.fromList ['n','v','o','s','m','k','c','d','t','d','b','f','h','y','x','s','p','h','z','g','e','r','a','l','j','q'], matchCount = 25, matchedCharacters = "nvosmkcdtdbfhyxsphzgraljq", secondArray = Array.fromList ['n','v','o','s','m','k','c','d','t','d','b','f','h','y','x','s','p','h','z','g','r','r','a','l','j','q'] }]]
+
+
+                blankChecksumAlmostMatch = ChecksumAlmostMatch (Array.fromList ['?']) (Array.fromList ['?']) True 0 "?"
+
+                filteredResults = Array.filter (\possibleMatch -> Array.length possibleMatch > 0) allMatches
+                    |> Array.get 0
+                    |> Maybe.withDefault Array.empty 
+                    |> Array.get 0
+                    |> Maybe.withDefault blankChecksumAlmostMatch
+                filteredResultsLog = log "matchedCharacters" filteredResults.matchedCharacters
+            in
+                { model | characterCount = charTotal,  matchedChecksumCharacters = filteredResults.matchedCharacters }
+
 
 
 view : Model -> Html Msg
 view model =
     div []
-        [ button [ onClick Increment ] [ text "+1" ]
-        , div [] [ text <| String.fromInt model.count ]
+        [ div [ class "demo-card-wide mdl-card mdl-shadow--2dp"][
+        div [class "mdl-card__title"][
+                h2[class "mdl-card__title-text"][text "Frequency Parser"]
+            ]
+            , div[class "mdl-card__supporting-text"][text "1. click 'Load Cached'", br[][], text "2. click 'Parse Checksums'"]
+            , form [action "#"][
+               div [ class "mdl-textfield mdl-js-textfield", style "padding" "16px"] [
+                textarea [class "mdl-textfield__input"
+                    , rows 3
+                    , placeholder "Paste checksums text here"
+                    , required True
+                    , onInput InputChecksumsText ][text model.checksumText]
+                ]
+                , div [class "mdl-card__supporting-text"] [ 
+                     div[class "textarea_label"][text "Checksum Value:"]
+                    , text <| String.fromInt model.characterCount
+                    , div[class "textarea_label"][text "Checksum Character Matches:"]
+                    , text <| model.matchedChecksumCharacters 
+                   ]
+                    
+           ]
+            , div [class "mdl-card__actions mdl-card--border"][
+               a [ 
+                   class "mdl-button mdl-button--colored mdl-js-button mdl-js-ripple-effect"
+                   , onClick LoadFromCache
+                 ] [ text "Load Cached" ]
+               , a [ 
+                   class "mdl-button mdl-button--colored mdl-js-button mdl-js-ripple-effect"
+                   , onClick ParseChecksumsText
+                 ] [ text "Parse Checksums" ]
+            ]
+          ]
         ]
 
 
@@ -284,6 +407,9 @@ main =
         , update = update
         }
 
+checksumLength : Int
+checksumLength =
+    26
 
 checksums : String
 checksums =
