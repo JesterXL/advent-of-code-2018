@@ -45,6 +45,7 @@ type alias Model =
     { claimsText : String -- big ole string full of checksums
     , claims : Array Claim -- how many 2's and 3's are there multipled together
     , squareInches : Int
+    , allOverlappingRectangles : Array (Array Rectangle)
     }
 
 initialModel : Model
@@ -52,6 +53,7 @@ initialModel =
     { claimsText = ""
     , claims = Array.empty
     , squareInches = 0
+    , allOverlappingRectangles = Array.empty
     }
 
 
@@ -138,6 +140,9 @@ canvasClaimColor =
     -- Color.rgb 233 30 99
     Color.rgb 136 14 79
 
+canvasOverlapColor =
+    Color.rgb 233 30 99
+
 renderBackground cmds =
     cmds
         |> Canvas.fillStyle canvasBackgroundColor
@@ -149,6 +154,11 @@ renderEmptyRectangle x y width height cmds =
         |> Canvas.strokeStyle canvasClaimColor
         |> Canvas.strokeRect (toFloat x) (toFloat y) (toFloat width) (toFloat height)
 
+renderFilledRectangle x y width height color cmds =
+    cmds
+        |> Canvas.fillStyle color
+        |> Canvas.fillRect (toFloat x) (toFloat y) (toFloat width) (toFloat height)
+
 renderClaim claim cmds =
     -- let
     --     logClaim = log "claim" claim
@@ -156,6 +166,10 @@ renderClaim claim cmds =
     -- in
     cmds
         |> renderEmptyRectangle claim.rectangle.left claim.rectangle.top claim.rectangle.width claim.rectangle.height
+
+renderOverlap rectangle cmds =
+    cmds
+        |> renderFilledRectangle rectangle.left rectangle.top rectangle.width rectangle.height canvasOverlapColor
 
 claimsOverlap : Claim -> Claim -> Bool
 claimsOverlap claim1 claim2 =
@@ -295,7 +309,15 @@ updateGrid grid demRects startingRow endingRow =
             sumArrays row updaterRow
         else
             row) grid.grid }
-    
+
+flattenRectangleArray : Array Rectangle -> Array Rectangle -> Array Rectangle
+flattenRectangleArray rectangles accumlator =
+    Array.foldl (\rect acc -> Array.push rect acc) accumlator rectangles
+
+flattenRectangleMDArray : Array (Array Rectangle) -> Array Rectangle
+flattenRectangleMDArray rectanglesList =
+    Array.foldl (\rects acc -> flattenRectangleArray rects acc) Array.empty rectanglesList
+
 update : Msg -> Model -> Model
 update msg model =
     case msg of
@@ -339,13 +361,8 @@ update msg model =
                 datFreshGridLog = log "datFreshGrid" "done"
 
 
-                
-
-                
-
-
             in
-            { model | claims = claims }
+            { model | claims = claims, allOverlappingRectangles = allOverlappingRectangles }
 
         -- when you type or copy pasta into the text area
         InputClaimsText text ->
@@ -384,6 +401,7 @@ view model =
                                 |> renderBackground
                                 -- |> (\cmds -> Array.foldl (renderClaim cmds) Claim 1 2 3 4 6)
                                 |> (\cmds -> Array.foldl renderClaim cmds model.claims)
+                                |> (\cmds -> Array.foldl renderOverlap cmds (flattenRectangleMDArray model.allOverlappingRectangles))
                                 )
                     ]
                 ]
