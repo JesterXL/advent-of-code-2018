@@ -17,21 +17,29 @@ import Browser
 import Char exposing (fromCode, toCode)
 import Debug exposing (log)
 import Dict exposing (Dict)
-import Html exposing (Html, a, br, button, div, form, h2, i, input, label, text, textarea, canvas)
-import Html.Attributes exposing (action, class, for, placeholder, required, rows, style, type_, width, height)
+import Html exposing (Html, a, br, button, div, form, h2, i, input, label, text, textarea)
+import Html.Attributes exposing (action, class, for, placeholder, required, rows, style, type_)
 import Html.Events exposing (onClick, onInput)
 import List exposing (filter, foldl, head, length, map, partition, reverse)
 import Maybe exposing (withDefault)
 import Set exposing (Set, empty, insert)
 import String exposing (split, toList)
 import Tuple exposing (first, pair)
+import Canvas exposing (..)
+import CanvasColor as Color exposing (Color)
 
 type alias Claim =
     { id : Int
-    , left : Int
+    , rectangle : Rectangle
+    , calculated : Bool }
+
+type alias Rectangle =
+    { left : Int
     , top : Int
     , width : Int
-    , height : Int }
+    , height : Int
+    , right : Int
+    , bottom : Int }
 
 type alias Model =
     { claimsText : String -- big ole string full of checksums
@@ -54,6 +62,14 @@ type Msg
 
 
 -- [Challenge 1 Functions] ------------------------------------------------------------
+
+getRectangle : Int -> Int -> Int -> Int -> Rectangle
+getRectangle left top width height =
+    Rectangle left top width height (left + width) (top + height)
+
+getClaim : Int -> Int -> Int -> Int -> Int -> Claim
+getClaim id left top width height =
+    Claim id (getRectangle left top width height) False
 
 parseClaims =
     split "\n" claimsCacheString
@@ -112,11 +128,225 @@ parseClaimStrings stringArray =
             |> Maybe.withDefault 0
 
     in
-        Claim id left top width height
+        Claim id (getRectangle left top width height) False
 
+canvasBackgroundColor =
+    -- Color.rgb 63 81 181
+    Color.rgb 26 35 126
+
+canvasClaimColor =
+    -- Color.rgb 233 30 99
+    Color.rgb 136 14 79
+
+renderBackground cmds =
+    cmds
+        |> Canvas.fillStyle canvasBackgroundColor
+        |> Canvas.fillRect 0 0 1000 1000
+
+renderEmptyRectangle x y width height cmds =
+    cmds
+        |> Canvas.lineWidth 2
+        |> Canvas.strokeStyle canvasClaimColor
+        |> Canvas.strokeRect (toFloat x) (toFloat y) (toFloat width) (toFloat height)
+
+renderClaim claim cmds =
+    -- let
+    --     logClaim = log "claim" claim
+    --     logCmds = log "cmds" cmds
+    -- in
+    cmds
+        |> renderEmptyRectangle claim.rectangle.left claim.rectangle.top claim.rectangle.width claim.rectangle.height
+
+claimsOverlap : Claim -> Claim -> Bool
+claimsOverlap claim1 claim2 =
+    let
+        rectangle1 = claim1.rectangle
+        rectangle2 = claim2.rectangle
+    in
+        if rectangle1.left > rectangle2.right || rectangle2.left > rectangle1.right then
+            False
+        else if rectangle1.bottom < rectangle2.top || rectangle2.bottom < rectangle1.top then
+            False
+        else  
+            True
+
+getClaimOverlap : Claim -> Claim -> Rectangle
+getClaimOverlap claim1 claim2 =
+    if claimsOverlap claim1 claim2 then
+        let
+            rect1 = claim1.rectangle
+            rect2 = claim2.rectangle
+            
+            minRight = min rect1.right rect2.right
+            maxLeft = max rect1.left rect2.left
+            xOverlap =  max 0 (minRight - maxLeft)
+
+            minBottom = min rect1.bottom rect2.bottom
+            maxTop = max rect1.top rect2.top
+            yOverlap =  max 0 (minBottom - maxTop)
+            -- rect1Log = log "rect1" rect1
+            -- rect2Log = log "rect2" rect2
+            -- xOverlapLog = log "xOverlap" xOverlap
+            -- yOverlapLog = log "yOverlap" yOverlap
+        in
+            getRectangle (max rect1.left rect2.left) (max rect1.top rect2.top) xOverlap yOverlap
+    else
+        getRectangle 0 0 0 0
+
+rectangleBiggerThanZero : Rectangle -> Bool
+rectangleBiggerThanZero rectangle =
+    if rectangle.width > 0 || rectangle.height > 0 then
+        True
+    else
+        False
+
+someArentCalculatedYet : Claim -> Claim -> Bool
+someArentCalculatedYet claim1 claim2 =
+    if claim1.calculated == False || claim2.calculated == False then
+        True
+    else
+        False
+    
+getClaimsOverlapped claims claim1 =
+    Array.foldl (\claim acc ->
+        if (someArentCalculatedYet claim1 claim) && claim.id /= claim1.id && claimsOverlap claim1 claim == True then
+            Array.push (getClaimOverlap claim1 claim) acc
+        else
+            acc) (Array.fromList []) claims
+
+combineTwoRectangles : Rectangle -> Rectangle -> Rectangle
+combineTwoRectangles rect1 rect2 =
+    getRectangle 0 0 (rect1.width + rect2.width) (rect1.height + rect2.height)
+
+combineAllRectangles : Array Rectangle -> Rectangle
+combineAllRectangles rectangles =
+    Array.foldl (\rect acc -> combineTwoRectangles rect acc) (getRectangle 0 0 0 0) rectangles
+
+calculateTotalArea : Rectangle -> Int
+calculateTotalArea rectangle =
+    rectangle.width * rectangle.height
+
+-- attempt 2
+
+buildIntArray : Int -> Array Int
+buildIntArray len =
+    Array.initialize len (always 0)
+
+type alias Grid =
+    { rows : Int
+    , cols : Int
+    , grid : Array (Array Int)
+    }
+
+buildGrid : Int -> Int -> Grid
+buildGrid rows cols =
+    buildIntArray rows
+    |> Array.map (\row -> buildIntArray cols)
+    |> Grid rows cols
+
+intInRange : Int -> Int -> Int -> Bool
+intInRange start end num =
+    if num >= start && num <= end then
+        True
+    else
+        False
+
+intIn1000Range : Int -> Bool
+intIn1000Range num =
+    intInRange 0 999 num
+
+getRowFromRectangle : Int -> Rectangle -> Array Int
+getRowFromRectangle cols rectangle =
+    let
+        intInClaimRange =
+            intInRange rectangle.left rectangle.right
+    in
+        buildIntArray cols
+        |> Array.indexedMap (\index value -> if (intInClaimRange index) then value + 1 else value)
+
+getRowsFromRectangle : Int -> Rectangle -> Array (Array Int)   
+getRowsFromRectangle cols rectangle =
+    Array.repeat rectangle.height 0
+    |> Array.map (\_ -> getRowFromRectangle cols rectangle)
+
+getIntOrZero : Int -> Array Int -> Int
+getIntOrZero index array =
+    Array.get index array
+    |> Maybe.withDefault 0
+
+sumArrays : Array Int -> Array Int -> Array Int
+sumArrays array1 array2 =
+    Array.indexedMap (\index value -> (getIntOrZero index array1) + value) array2
+
+getRowOrDefaultZeroArray : Array (Array Int) -> Int -> Int -> Array Int
+getRowOrDefaultZeroArray demRects index length =
+    Array.get index demRects
+    |> Maybe.withDefault (buildIntArray length)
+
+
+updateGrid : Grid -> Array (Array Int) -> Int -> Int -> Grid 
+updateGrid grid demRects startingRow endingRow =
+    { grid | grid = Array.indexedMap (\index row -> 
+        if (intInRange startingRow endingRow index) == True then
+            let
+                indexToGetRow = index - startingRow
+                updaterRow = getRowOrDefaultZeroArray demRects indexToGetRow grid.rows 
+            in
+            sumArrays row updaterRow
+        else
+            row) grid.grid }
+    
 update : Msg -> Model -> Model
 update msg model =
     case msg of
+        -- do the magic
+        ParseClaimsText ->
+            let
+                -- Attempt #1: 281701600 is too high, however, I figured as much. I'm not removing 2 matches, and instead
+                -- keeping them around; I need to remove them.
+                rowsAmount = 1000
+                colsAmount = 1000
+
+                claims = parseClaims
+                    |> Array.map parseClaimStrings
+                    -- |> Array.slice 0 100
+                -- strLog = log "claims" claims
+
+                grid = 
+                    buildGrid rowsAmount colsAmount
+
+                allOverlappingRectangles =
+                    Array.map (\claim -> getClaimsOverlapped claims claim) claims
+                    |> Array.filter (\overlappedRectangles -> Array.isEmpty overlappedRectangles == False)
+                -- allOverlappingRectanglesLog = log "allOverlappingRectangles" allOverlappingRectangles
+
+
+                firstRectangle = 
+                    Array.get 0 allOverlappingRectangles
+                    |> Maybe.withDefault (Array.fromList [getRectangle 0 0 0 0])
+                    |> Array.get 0
+                    |> Maybe.withDefault (getRectangle 0 0 0 0)
+
+                demRects = getRowsFromRectangle colsAmount firstRectangle
+                -- demRectsLog = log "demRects" demRects
+                
+                -- newGrid = updateGrid grid demRects firstRectangle.top firstRectangle.bottom
+                -- newGridLog = log "newGrid" newGrid
+
+                datFreshGrid =
+                    Array.map (\rectList -> Array.map (\rect -> updateGrid grid demRects rect.top rect.bottom) rectList ) allOverlappingRectangles
+                -- datFreshGridLog = log "datFreshGrid" datFreshGrid
+                datFreshGridLog = log "datFreshGrid" "done"
+
+
+                
+
+                
+
+
+            in
+            { model | claims = claims }
+
         -- when you type or copy pasta into the text area
         InputClaimsText text ->
             { model | claimsText = text }
@@ -124,16 +354,6 @@ update msg model =
         -- put the checksums function text into the text area
         LoadFromCache ->
             { model | claimsText = claimsCacheString }
-
-        -- do the magic
-        ParseClaimsText ->
-            let
-                str = parseClaims
-                    |> Array.map parseClaimStrings
-                strLog = log "str" str
-            in
-            model
-
 
 view : Model -> Html Msg
 view model =
@@ -155,10 +375,16 @@ view model =
                         [ text model.claimsText ]
                     ]
                 , div [][
-                        canvas [
-                            width 1000
-                            , height 1000
-                        ][]
+                        Canvas.element
+                            1000
+                            1000
+                            [ style "border" "1px solid black"]
+                            ( Canvas.empty
+                                |> Canvas.clearRect 0 0 1000 1000
+                                |> renderBackground
+                                -- |> (\cmds -> Array.foldl (renderClaim cmds) Claim 1 2 3 4 6)
+                                |> (\cmds -> Array.foldl renderClaim cmds model.claims)
+                                )
                     ]
                 ]
             , div [ class "mdl-card__actions mdl-card--border" ]
