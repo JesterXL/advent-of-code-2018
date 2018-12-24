@@ -34,6 +34,7 @@ type alias Model =
     , squareInches : Int
     , overlappedRectangles : Array Rectangle
     , noOverlapClaimID : Int
+    , noOverlapRectangle : Rectangle
     }
 
 initialModel : Model
@@ -43,6 +44,7 @@ initialModel =
     , squareInches = 0
     , overlappedRectangles = Array.empty
     , noOverlapClaimID = 0
+    , noOverlapRectangle = getRectangle 0 0 0 0
     }
 
 
@@ -53,6 +55,7 @@ type Msg
 
 
 -- [Challenge 1 Functions] ------------------------------------------------------------
+
 type alias Claim = 
     { id : Int
     , rectangle : Rectangle 
@@ -138,15 +141,16 @@ parseClaimStrings stringArray =
         getClaim id left top width height
 
 canvasBackgroundColor =
-    -- Color.rgb 63 81 181
     Color.rgb 26 35 126
 
 canvasClaimColor =
-    -- Color.rgb 233 30 99
     Color.rgb 136 14 79
 
 canvasOverlapColor =
     Color.rgb 233 30 99
+
+canvasNoOverlapColor =
+    Color.rgb 252 228 236
 
 renderBackground cmds =
     cmds
@@ -155,7 +159,7 @@ renderBackground cmds =
 
 renderEmptyRectangle x y width height cmds =
     cmds
-        |> Canvas.lineWidth 2
+        |> Canvas.lineWidth 3
         |> Canvas.strokeStyle canvasClaimColor
         |> Canvas.strokeRect (toFloat x) (toFloat y) (toFloat width) (toFloat height)
 
@@ -171,6 +175,10 @@ renderClaim claim cmds =
 renderOverlap rectangle cmds =
     cmds
         |> renderFilledRectangle rectangle.left rectangle.top rectangle.width rectangle.height canvasOverlapColor
+
+renderNoOverlap rectangle cmds =
+    cmds
+        |> renderFilledRectangle rectangle.left rectangle.top rectangle.width rectangle.height canvasNoOverlapColor
 
 -- [Challenge 1] ------------------------------------------------
 
@@ -214,12 +222,8 @@ updateGridFromClaim : Claim -> Dict String Int -> Dict String Int
 updateGridFromClaim claim grid =
     getXListFromClaim claim
     |> List.foldl (\x acc->
-        let
-            -- xLog = log "x:" x
-            yList = getYListFromClaim claim
-            updatedGrid = updateGridFromYList x acc yList
-        in
-            updatedGrid) grid
+            getYListFromClaim claim
+            |> updateGridFromYList x acc) grid
 
 -- [Challenge 2] ------------------------------------------------
 
@@ -292,11 +296,6 @@ update msg model =
                     parseClaims
                     -- |> Array.slice 0 100
                     |> Array.toList
-                -- claimsLog = log "claims" (List.length claims)
-                -- 1365 length: matches JavaScript
-                -- xList's appear to match
-                -- yList DOES NOT MATCH
-
 
                 grid =
                     Dict.empty
@@ -312,7 +311,6 @@ update msg model =
                 allOverlappingRectangles =
                     List.map (\claim -> getClaimsOverlapped claims claim) claims
                     |> List.foldl (\list acc -> List.append list acc) []
-                -- allOverlappingRectanglesLog = log "allOverlappingRectangles" allOverlappingRectangles
 
                 claimIDs =
                     List.foldl (\claim acc-> Set.insert claim.id acc) Set.empty claims
@@ -323,21 +321,25 @@ update msg model =
                     |> Set.toList
                     |> List.head
                     |> Maybe.withDefault 0
-                -- claimIDsLog = log "claimIDs" claimIDs
-                -- noOverlapLog = log "noOverlap" noOverlap
+
+                noOverlapClaim =
+                    List.filter (\claim -> claim.id == noOverlapClaimID) claims
+                    |> List.head
+                    |> Maybe.withDefault (getClaim 0 0 0 0 0)
 
 
             in
             { model | squareInches = squareInches
             , claims = Array.fromList claims
             , overlappedRectangles = Array.fromList allOverlappingRectangles
-            , noOverlapClaimID = noOverlapClaimID}
+            , noOverlapClaimID = noOverlapClaimID
+            , noOverlapRectangle = noOverlapClaim.rectangle}
 
         -- when you type or copy pasta into the text area
         InputClaimsText text ->
             { model | claimsText = text }
 
-        -- put the checksums function text into the text area
+        -- put the claim strings function text into the text area
         LoadFromCache ->
             { model | claimsText = claimsCacheString }
 
@@ -374,9 +376,9 @@ view model =
                             ( Canvas.empty
                                 |> Canvas.clearRect 0 0 1000 1000
                                 |> renderBackground
-                                -- |> (\cmds -> Array.foldl (renderClaim cmds) Claim 1 2 3 4 6)
                                 |> (\cmds -> Array.foldl renderClaim cmds model.claims)
                                 |> (\cmds -> Array.foldl renderOverlap cmds model.overlappedRectangles)
+                                |> (\cmds -> renderNoOverlap model.noOverlapRectangle cmds)
                                 )
                     ]
                 ]
