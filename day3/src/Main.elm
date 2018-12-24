@@ -32,6 +32,8 @@ type alias Model =
     { claimsText : String -- big ole string full of checksums
     , claims : Array Claim -- how many 2's and 3's are there multipled together
     , squareInches : Int
+    , overlappedRectangles : Array Rectangle
+    , noOverlapClaimID : Int
     }
 
 initialModel : Model
@@ -39,6 +41,8 @@ initialModel =
     { claimsText = ""
     , claims = Array.empty
     , squareInches = 0
+    , overlappedRectangles = Array.empty
+    , noOverlapClaimID = 0
     }
 
 
@@ -52,7 +56,8 @@ type Msg
 type alias Claim = 
     { id : Int
     , rectangle : Rectangle 
-    , processed : Bool }
+    , calculated : Bool
+    , overlaps : Bool }
 
 type alias Rectangle =
     { left : Int
@@ -60,15 +65,16 @@ type alias Rectangle =
     , width : Int
     , height : Int
     , right : Int
-    , bottom : Int }
+    , bottom : Int
+    , overlaps : Bool }
 
 getRectangle : Int -> Int -> Int -> Int -> Rectangle
 getRectangle left top width height = 
-    Rectangle left top width height (left + width) (top + height)
+    Rectangle left top width height (left + width) (top + height) False
 
 getClaim : Int -> Int -> Int -> Int -> Int -> Claim
 getClaim id left top width height =
-    Claim id (getRectangle left top width height) False
+    Claim id (getRectangle left top width height) False False
 
 parseClaims : Array Claim
 parseClaims =
@@ -129,7 +135,7 @@ parseClaimStrings stringArray =
             |> Maybe.withDefault 0
 
     in
-        Claim id (getRectangle left top width height) False
+        getClaim id left top width height
 
 canvasBackgroundColor =
     -- Color.rgb 63 81 181
@@ -165,6 +171,8 @@ renderClaim claim cmds =
 renderOverlap rectangle cmds =
     cmds
         |> renderFilledRectangle rectangle.left rectangle.top rectangle.width rectangle.height canvasOverlapColor
+
+-- [Challenge 1] ------------------------------------------------
 
 getXListFromClaim : Claim -> List Int
 getXListFromClaim claim =
@@ -213,6 +221,54 @@ updateGridFromClaim claim grid =
         in
             updatedGrid) grid
 
+-- [Challenge 2] ------------------------------------------------
+
+claimsOverlap : Claim -> Claim -> Bool
+claimsOverlap claim1 claim2 =
+    let
+        rectangle1 = claim1.rectangle
+        rectangle2 = claim2.rectangle
+    in
+        if rectangle1.left > rectangle2.right || rectangle2.left > rectangle1.right then
+            False
+        else if rectangle1.bottom < rectangle2.top || rectangle2.bottom < rectangle1.top then
+            False
+        else  
+            True
+
+getClaimOverlap : Claim -> Claim -> Rectangle
+getClaimOverlap claim1 claim2 =
+    if claimsOverlap claim1 claim2 then
+        let
+            rect1 = claim1.rectangle
+            rect2 = claim2.rectangle
+            
+            minRight = min rect1.right rect2.right
+            maxLeft = max rect1.left rect2.left
+            xOverlap =  max 0 (minRight - maxLeft)
+
+            minBottom = min rect1.bottom rect2.bottom
+            maxTop = max rect1.top rect2.top
+            yOverlap =  max 0 (minBottom - maxTop)
+        in
+            getRectangle (max rect1.left rect2.left) (max rect1.top rect2.top) xOverlap yOverlap
+    else
+        getRectangle 0 0 0 0
+
+-- getClaimsOverlapped : List Claim -> Claim -> List Claim
+getClaimsOverlapped claims claim1 =
+    List.foldl (\claim acc ->
+        if (claim.id /= claim1.id && claimsOverlap claim1 claim == True) then
+            List.append [(getClaimOverlap claim1 claim)] acc
+        else
+            acc) [] claims
+
+getClaimsWithNoOverlap claims claim1 =
+    List.foldl (\claim acc->
+        if (claim.id /= claim1.id && claimsOverlap claim1 claim == True) then
+            Set.insert claim1.id (Set.insert claim.id acc)
+        else
+            acc) Set.empty claims
 
 update : Msg -> Model -> Model
 update msg model =
@@ -230,7 +286,7 @@ update msg model =
                 -- Attempt #7: Ok, cool got 113576. I had height vs. bottom in rectangle addition, whoops.
                 -- keeping them around; I need to remove them.
                 -- ** Challenge 2 **
-                -- Attempt #1: ok, going to try again from Elm first.
+                -- Attempt #1: ok, going to try again from Elm first. 825 ... boom, first try!
 
                 claims =
                     parseClaims
@@ -248,19 +304,34 @@ update msg model =
                 claimsGrid =
                     List.foldl (\claim acc -> updateGridFromClaim claim acc) grid claims
 
-                overlapsCount =
+                squareInches =
                     Dict.filter (\_ value -> value > 1) claimsGrid
                     |> Dict.size
-                overlapsCountLog = log "overlapsCount" overlapsCount
+                -- squareInchesLog = log "squareInches" squareInches
 
-                noOverlap =
-                    Dict.filter (\_ value -> value == 1) claimsGrid
-                noOverlapLog = log "noOverlap" noOverlap
+                allOverlappingRectangles =
+                    List.map (\claim -> getClaimsOverlapped claims claim) claims
+                    |> List.foldl (\list acc -> List.append list acc) []
+                -- allOverlappingRectanglesLog = log "allOverlappingRectangles" allOverlappingRectangles
 
-                -- 4858
+                claimIDs =
+                    List.foldl (\claim acc-> Set.insert claim.id acc) Set.empty claims
+                noOverlapClaimID =
+                    List.map (\claim -> getClaimsWithNoOverlap claims claim) claims
+                    |> List.foldl (\set acc -> Set.union set acc) Set.empty
+                    |> Set.diff claimIDs
+                    |> Set.toList
+                    |> List.head
+                    |> Maybe.withDefault 0
+                -- claimIDsLog = log "claimIDs" claimIDs
+                -- noOverlapLog = log "noOverlap" noOverlap
+
 
             in
-            { model | claims = Array.fromList claims}
+            { model | squareInches = squareInches
+            , claims = Array.fromList claims
+            , overlappedRectangles = Array.fromList allOverlappingRectangles
+            , noOverlapClaimID = noOverlapClaimID}
 
         -- when you type or copy pasta into the text area
         InputClaimsText text ->
@@ -289,17 +360,23 @@ view model =
                         ]
                         [ text model.claimsText ]
                     ]
+                , div [ class "mdl-card__supporting-text" ]
+                    [ div [ class "textarea_label" ] [ text "Square Inches:" ]
+                    , text <| String.fromInt model.squareInches
+                    , div [ class "textarea_label" ] [ text "No Overlap Claim ID:" ]
+                    , text <| String.fromInt model.noOverlapClaimID
+                    ]
                 , div [][
                         Canvas.element
                             1000
                             1000
-                            [ style "border" "1px solid black"]
+                            [ style "border" "1px solid black", style "width" "200px"]
                             ( Canvas.empty
                                 |> Canvas.clearRect 0 0 1000 1000
                                 |> renderBackground
                                 -- |> (\cmds -> Array.foldl (renderClaim cmds) Claim 1 2 3 4 6)
                                 |> (\cmds -> Array.foldl renderClaim cmds model.claims)
-                                -- |> (\cmds -> Array.foldl renderOverlap cmds model.allOverlappingRectangles)
+                                |> (\cmds -> Array.foldl renderOverlap cmds model.overlappedRectangles)
                                 )
                     ]
                 ]
