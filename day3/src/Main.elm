@@ -30,11 +30,11 @@ import CanvasColor as Color exposing (Color)
 
 type alias Model =
     { claimsText : String -- big ole string full of checksums
-    , claims : Array Claim -- how many 2's and 3's are there multipled together
-    , squareInches : Int
-    , overlappedRectangles : Array Rectangle
-    , noOverlapClaimID : Int
-    , noOverlapRectangle : Rectangle
+    , claims : Array Claim -- all the Elf claims, like id, where the rectangle is on the cloth
+    , squareInches : Int -- total square inches of overlapping claims
+    , overlappedRectangles : Array Rectangle -- all the overlapped rectangles in a list so I can draw them
+    , noOverlapClaimID : Int -- the claim id that doesn't overlap anything
+    , noOverlapRectangle : Rectangle -- the rectangle that doesn't overlap anything so I can draw it
     }
 
 initialModel : Model
@@ -51,7 +51,7 @@ initialModel =
 type Msg
     = InputClaimsText String -- when you type or paste in the text area
     | ParseClaimsText -- RUN THE MAGIC
-    | LoadFromCache -- call the checksums function to load from the code vs. copy pasta
+    | LoadFromCache -- loads strings vs. you copy pasta
 
 
 -- [Challenge 1 Functions] ------------------------------------------------------------
@@ -71,14 +71,17 @@ type alias Rectangle =
     , bottom : Int
     , overlaps : Bool }
 
+-- easier if I make a function so I can generate the right and bottom properties when you make the rectangle
 getRectangle : Int -> Int -> Int -> Int -> Rectangle
 getRectangle left top width height = 
     Rectangle left top width height (left + width) (top + height) False
 
+-- easier to create a claim this way, less parameters
 getClaim : Int -> Int -> Int -> Int -> Int -> Claim
 getClaim id left top width height =
     Claim id (getRectangle left top width height) False False
 
+-- read in the string, map all blanks to another list in a list, then parse each one individually
 parseClaims : Array Claim
 parseClaims =
     split "\n" claimsCacheString
@@ -87,6 +90,7 @@ parseClaims =
         |> Array.map Array.fromList
         |> Array.map parseClaimStrings
 
+-- so much easier in JavaScript, lol. 
 parseClaimStrings : Array String -> Claim
 parseClaimStrings stringArray =
     let
@@ -140,6 +144,7 @@ parseClaimStrings stringArray =
     in
         getClaim id left top width height
 
+-- functions used to color the claim drawings on the canvas to better visualize the claims
 canvasBackgroundColor =
     Color.rgb 26 35 126
 
@@ -182,6 +187,7 @@ renderNoOverlap rectangle cmds =
 
 -- [Challenge 1] ------------------------------------------------
 
+-- get's all the x values based on the rectangle
 getXListFromClaim : Claim -> List Int
 getXListFromClaim claim =
     List.range claim.rectangle.left (claim.rectangle.right - 1)
@@ -190,6 +196,7 @@ getXListsFromClaims : List Claim -> List (List Int)
 getXListsFromClaims claims =
     List.map getXListFromClaim claims
 
+-- get's all the y values based on the rectangle
 getYListFromClaim : Claim -> List Int
 getYListFromClaim claim =
     List.range claim.rectangle.top (claim.rectangle.bottom - 1)
@@ -198,10 +205,12 @@ getYListsFromClaims : List Claim -> List (List Int)
 getYListsFromClaims claims =
     List.map getYListFromClaim claims
 
+-- give us a big-old hash name of x and y; if they match, that means a duplicate
 makeIndexString : Int -> Int -> String
 makeIndexString x y =
     String.join "," [String.fromInt x, String.fromInt y]
 
+-- maybe math; convenience 
 maybeAddOne : Maybe Int -> Int
 maybeAddOne maybe =
     case maybe of
@@ -210,6 +219,7 @@ maybeAddOne maybe =
         Just val ->
             val + 1
 
+-- update the dictionary at a particular x and y coordinate; if new, it'll set to 1, else add 1 to existing value
 updateGrid : Int -> Int -> Dict String Int -> Dict String Int
 updateGrid x y grid =
     Dict.update (makeIndexString x y) (\current -> Just (maybeAddOne current)) grid
@@ -218,6 +228,7 @@ updateGridFromYList : Int -> Dict String Int -> List Int -> Dict String Int
 updateGridFromYList x grid yList =
     List.foldl (\y updatedGrid -> updateGrid x y updatedGrid) grid yList
 
+-- take a claim, and update the dictionary based on the squares the claim covers
 updateGridFromClaim : Claim -> Dict String Int -> Dict String Int
 updateGridFromClaim claim grid =
     getXListFromClaim claim
@@ -227,6 +238,7 @@ updateGridFromClaim claim grid =
 
 -- [Challenge 2] ------------------------------------------------
 
+-- determines if rectangles overlap
 claimsOverlap : Claim -> Claim -> Bool
 claimsOverlap claim1 claim2 =
     let
@@ -240,6 +252,7 @@ claimsOverlap claim1 claim2 =
         else  
             True
 
+-- gets the rectangle of the overlap; used to draw on the canvas where claims overlap
 getClaimOverlap : Claim -> Claim -> Rectangle
 getClaimOverlap claim1 claim2 =
     if claimsOverlap claim1 claim2 then
@@ -259,6 +272,7 @@ getClaimOverlap claim1 claim2 =
     else
         getRectangle 0 0 0 0
 
+-- gets all claims that overlap the claim you pass in
 -- getClaimsOverlapped : List Claim -> Claim -> List Claim
 getClaimsOverlapped claims claim1 =
     List.foldl (\claim acc ->
@@ -267,6 +281,7 @@ getClaimsOverlapped claims claim1 =
         else
             acc) [] claims
 
+-- gets the ids of claims that overlap; a bit misnammed, heh
 getClaimsWithNoOverlap claims claim1 =
     List.foldl (\claim acc->
         if (claim.id /= claim1.id && claimsOverlap claim1 claim == True) then
@@ -372,7 +387,7 @@ view model =
                         Canvas.element
                             1000
                             1000
-                            [ style "border" "1px solid black", style "width" "200px"]
+                            [ style "border" "1px solid black", style "width" "300px"]
                             ( Canvas.empty
                                 |> Canvas.clearRect 0 0 1000 1000
                                 |> renderBackground

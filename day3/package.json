@@ -7,7 +7,8 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "webpack-dev-server --port 3000 --watch --mode=development --progress",
     "watch": "webpack --mode development --watch",
-    "build": "elm make src/Main.elm --output dist/__temp_deleteme.js"
+    "build": "elm make src/Main.elm --output dist/__temp_deleteme.js",
+    "build-webpack": "webpack --mode production"
   },
   "keywords": [],
   "author": "",
