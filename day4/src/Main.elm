@@ -104,7 +104,42 @@ parseGuardStatus =
             |. keyword "falls asleep"
         , succeed WakeUp
             |. keyword "wakes up"]
-        
+
+compareSleepTimeYear : SleepTime -> SleepTime -> Order
+compareSleepTimeYear a b =
+    compare a.year b.year
+
+compareSleepTimeMonth : SleepTime -> SleepTime -> Order
+compareSleepTimeMonth a b =
+    compare a.month b.month
+
+compareSleepTimeDate : SleepTime -> SleepTime -> Order
+compareSleepTimeDate a b =
+    compare a.date b.date
+
+compareSleepTimeHour : SleepTime -> SleepTime -> Order
+compareSleepTimeHour a b =
+    compare a.hour b.hour
+
+compareSleepTimeMinute : SleepTime -> SleepTime -> Order
+compareSleepTimeMinute a b =
+    compare a.minute b.minute
+
+compareSleepTimes : SleepTime -> SleepTime -> Order
+compareSleepTimes a b =
+    case compareSleepTimeMonth a b of
+        EQ ->
+            case compareSleepTimeDate a b of
+                EQ ->
+                    case compareSleepTimeHour a b of
+                        EQ ->
+                            compareSleepTimeMinute a b
+                        _ ->
+                            compareSleepTimeHour a b
+                _ ->
+                    compareSleepTimeDate a b
+        _ ->
+            compareSleepTimeMonth a b
 
 
 update : Msg -> Model -> Model
@@ -113,10 +148,13 @@ update msg model =
         -- do the magic
         ParseSleepTimesText ->
             let
-                -- wat = Parser.run parseDateString "[1518-05-24 23:56]"
-                -- watLog = log "wat" wat
-                sleepTimes = parseSleepTimes sleepTimesCacheString
+                sleepTimes =
+                    parseSleepTimes sleepTimesCacheString
+                    |> List.sortWith compareSleepTimes
+                
                 sleepTimesLog = log "sleepTimes" sleepTimes
+
+
             in
             { model | sleepTimes = sleepTimes }
 
@@ -150,12 +188,27 @@ getStatusIcon guardStatus =
 
 sleepTimeListItem : SleepTime -> Html Msg
 sleepTimeListItem sleepTime =
-    li [ class "mdl-list__item"][
+    li [ class "mdl-list__item mdl-list__item--two-line"][
         span [ class "mdl-list__item-primary-content"][
             i [ class "material-icons mdl-list__item-icon"][text (getStatusIcon sleepTime.status)]
-            , text (getStatusString sleepTime.status)
+            , span [][text (getStatusString sleepTime.status)]
+            , span [ class "mdl-list__item-sub-title"][ text (formatSleepTime sleepTime)]
         ]
     ]
+
+formatLeadingZero : Int -> String
+formatLeadingZero num =
+    let
+        val = String.fromInt num
+    in
+    if String.length val < 2 then
+        "0" ++ val
+    else
+        val
+
+formatSleepTime : SleepTime -> String
+formatSleepTime sleepTime =
+   formatLeadingZero sleepTime.hour ++ ":" ++ formatLeadingZero sleepTime.minute ++ " " ++ formatLeadingZero sleepTime.date ++ "/" ++ formatLeadingZero sleepTime.month ++ "/" ++ formatLeadingZero sleepTime.year
 
 view : Model -> Html Msg
 view model =
