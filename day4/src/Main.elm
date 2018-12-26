@@ -33,6 +33,7 @@ type alias Model =
     { sleepTimesText : String
     , sleepTimes : List SleepTime
     , guardSleepSchedule : Dict Int GuardSleepTime
+    , challenge1 : Int
     }
 
 initialModel : Model
@@ -40,6 +41,7 @@ initialModel =
     { sleepTimesText = ""
     , sleepTimes = []
     , guardSleepSchedule = Dict.empty
+    , challenge1 = 0
     }
 
 type Msg
@@ -77,12 +79,13 @@ type alias GuardSleepTime =
     , start: DateTime
     , sleep : List DateTime
     , wake : List DateTime
-    , totalMinutes : Int }
+    , totalMinutes : Int
+    , maxMinute : (Int, Int)  }
 
 getGuardSleepTime : Int -> DateTime -> List DateTime -> List DateTime -> GuardSleepTime
 getGuardSleepTime id start sleep wake =
     let
-        base = GuardSleepTime id start sleep wake 0
+        base = GuardSleepTime id start sleep wake 0 (0, 0)
     in
         { base | totalMinutes = (sumSleepAndWake base)}
 
@@ -249,6 +252,13 @@ update msg model =
                 -- , sleep : List DateTime
                 -- , wake : List DateTime }
 
+                -- ** Challenge 1 **
+                -- Attempt #1: 1049, not the right answer, answer too low (id of the guard with most minutes)
+                -- ... whoa, I didn't even read the question, lol, ok, multipled by start minute, my bad
+                -- Attempt #2: 17833, too low
+                -- Attempt #3: 38813. OH YEAH, who's da man!?
+
+
                 guardSleepScheduleDict =
                     List.foldl (\sleepTime acc ->
                         case sleepTime.status of
@@ -261,10 +271,21 @@ update msg model =
                         ) {id = 0, parts = Dict.empty} model.sleepTimes
                         |> .parts
                         |> Dict.map (\k v -> { v | totalMinutes = sumSleepAndWake v})
+                        |> Dict.map (\k v -> { v | maxMinute = foldMinuteValues v})
                 -- guardSleepScheduleDictLog = log "guardSleepScheduleDict" guardSleepScheduleDict
+                biggestSleeper =
+                    Dict.values guardSleepScheduleDict 
+                    |> List.sortBy .totalMinutes 
+                    |> List.reverse
+                    |> List.head
+                    |> Maybe.withDefault (getGuardSleepTime 0 (DateTime 0 0 0 0 0) [] [])
+
+                biggestSleeperLog = log "biggestSleeper" biggestSleeper
+                challenge1 = biggestSleeper.id * (Tuple.first biggestSleeper.maxMinute)
+                challenge1Log = log "challenge1" challenge1
 
             in
-            { model | guardSleepSchedule = guardSleepScheduleDict }
+            { model | guardSleepSchedule = guardSleepScheduleDict, challenge1 = challenge1}
             -- model
 
         -- when you type or copy pasta into the text area
@@ -372,6 +393,49 @@ sumSleepAndWake guardSleepTime =
     in
         total
 
+
+sum2Arrays : Array Int -> Array Int -> Array Int
+sum2Arrays array1 array2 =
+    Array.indexedMap (\index value->
+        let
+            value2 =
+                Array.get index array2
+                |> Maybe.withDefault 0
+        in
+        value2 + value) array1
+
+foldMinuteValues guardSleepTime =
+    let
+        sleep = Array.fromList guardSleepTime.sleep
+        wake = Array.fromList guardSleepTime.wake
+        minuteList =
+            Array.indexedMap (\index value ->
+                let
+                    sleepTime = value
+                    wakeTime = Array.get index wake |> Maybe.withDefault defaultDateTime
+                    total = dateDifference sleepTime wakeTime
+                    start = getStartMinute sleepTime wakeTime
+                    end = start + total
+                    final =
+                        Array.initialize 60 (always 0)
+                        |> Array.indexedMap (\minuteIndex minuteValue ->
+                            if minuteIndex >= start && minuteIndex < end then
+                                minuteValue + 1
+                            else
+                                minuteValue)
+                in
+                    final) sleep
+            |> Array.foldl (\valueList acc -> sum2Arrays valueList acc) (Array.initialize 60 (always 0))
+            |> Array.toIndexedList 
+            |> List.sortBy Tuple.second
+            |> List.reverse
+            |> List.head
+            |> Maybe.withDefault (0, 0)
+        -- minuteListLog = log "minuteList" minuteList
+    in
+        minuteList
+
+
 -- buildProgressBar : GuardSleepTime -> Html Msg
 -- buildProgressBar guardSleepTime =
 --     let
@@ -389,9 +453,10 @@ sumSleepAndWake guardSleepTime =
 buildTableRow : GuardSleepTime -> Html Msg
 buildTableRow guardSleepTime =
     tr[][
-        td [][ text (formatSleepTimeMonthDate guardSleepTime)]
+        td [class "mdl-data-table__cell--non-numeric"][ text (formatSleepTimeMonthDate guardSleepTime)]
         , td [][text ("#" ++ String.fromInt guardSleepTime.id)]
-        , td [class "mdl-data-table__cell--non-numeric"][ text (String.fromInt guardSleepTime.totalMinutes) ]
+        , td [][ text (String.fromInt guardSleepTime.totalMinutes) ]
+        , td [][ text (String.fromInt (Tuple.second guardSleepTime.maxMinute)) ]
     ]
 
 buildTable : Dict Int GuardSleepTime -> Html Msg
@@ -399,9 +464,10 @@ buildTable guardSleepTimes =
     table [class "mdl-data-table mdl-js-data-table mdl-data-table--selectable mdl-shadow--2dp" , style "width" "100%"][
         thead[][
             tr[][
-               th[][text "Date"] 
-               , th[][text "ID"] 
-               , th[class "mdl-data-table__cell--non-numeric"][text "Minute"] 
+                th[class "mdl-data-table__cell--non-numeric"][text "Date"] 
+                , th[][text "ID"] 
+                , th[][text "Total Sleeping Minutes"]
+                , th[][text "Most Slept Minute"]
             ]
         ]
         , tbody[] (Dict.values guardSleepTimes |> List.sortBy .totalMinutes |> List.reverse |> List.map buildTableRow)
