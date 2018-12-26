@@ -65,6 +65,10 @@ intListToPoint intList =
     in
     Point x y
 
+add100 : Int -> Int
+add100 value =
+    value + 100
+
 -- parseCoordinates : String -> List (List (Int, Int))
 parseCoordinates string =
     String.split "\n" string
@@ -72,6 +76,7 @@ parseCoordinates string =
     |> List.map (List.map String.trim)
     |> List.map (List.map String.toInt)
     |> List.map (List.map (Maybe.withDefault 0))
+    |> List.map (List.map add100)
     |> List.map intListToPoint
 
 -- getManhattanDistance =
@@ -143,11 +148,11 @@ canvasNoOverlapColor =
 
 getRows : Int
 getRows =
-    500
+    600
 
 getCols : Int
 getCols =
-    500
+    600
 
 getRowsFloat : Float
 getRowsFloat =
@@ -170,6 +175,7 @@ drawCoordinate point cmds =
 coordinatesToFloats : List Point -> List PointFloat
 coordinatesToFloats coordinates =
     List.map (\point -> PointFloat (toFloat point.x) (toFloat point.y)) coordinates
+
 
 
 view : Model -> Html Msg
