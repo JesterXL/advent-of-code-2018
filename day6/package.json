@@ -1,0 +1,28 @@
+{
+  "name": "day1",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "webpack-dev-server --port 3000 --watch --mode=development --progress",
+    "watch": "webpack --mode development --watch",
+    "build": "elm make src/Main.elm --output dist/__temp_deleteme.js",
+    "build-webpack": "webpack --mode production",
+    "nuke-elm": "rm -rf elm-stuff && rm -rf ~/.elm && npm run build"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "elm-webpack-loader": "^5.0.0",
+    "file-loader": "^2.0.0",
+    "loader-utils": "^1.1.0",
+    "webpack": "^4.26.1",
+    "webpack-dev-server": "^3.1.10"
+  },
+  "dependencies": {
+    "lodash": "^4.17.11",
+    "webpack-cli": "^3.1.2"
+  }
+}
