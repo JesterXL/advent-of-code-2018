@@ -45,12 +45,47 @@ type Msg
 
 -- [Challenge 1 Functions] ------------------------------------------------------------
 
+getSameTypeOppositePolarityUnitsBase : List String
+getSameTypeOppositePolarityUnitsBase =
+    ["aA" , "bB" , "cC" , "dD" , "eE" , "fF" , "gG" , "hH" , "iI" , "jJ" , "kK" , "lL" , "mM" , "nN" , "oO" , "pP" , "qQ" , "rR" , "sS" , "tT" , "uU" , "vV" , "wW" , "xX" , "yY" , "zZ"]
+
+getSameTypeOppositePolarityUnits : List String
+getSameTypeOppositePolarityUnits =
+    getSameTypeOppositePolarityUnitsBase
+    |> List.map String.reverse
+    |> List.append getSameTypeOppositePolarityUnitsBase
+
+sourceContainsUnit : String -> String -> Bool
+sourceContainsUnit source unit =
+    String.contains unit source
+
+replaceIfContainsAny : String -> String
+replaceIfContainsAny source =
+    if List.any (sourceContainsUnit source) getSameTypeOppositePolarityUnits then
+        List.foldl (\unit acc -> String.replace unit "" acc) source getSameTypeOppositePolarityUnits
+        |> replaceIfContainsAny
+    else
+        source
+
+-- any isEven [2,3] == True
+
 update : Msg -> Model -> Model
 update msg model =
     case msg of
         -- do the magic
         ParseUnitsText ->
-            model
+            let
+                -- ** Challenge 1 **
+                -- Attempt #1: 34220 is too high; figured since I only folded once, heh, worth a shot.
+                -- Attempt #2: 11042 is correct. Recursion FTW.
+                
+
+                remainingUnits =
+                    -- List.foldl (\unit acc -> String.replace unit "" acc) model.unitsText getSameTypeOppositePolarityUnits
+                    replaceIfContainsAny model.unitsText
+
+            in
+            { model | remainingUnits = remainingUnits }
 
         -- when you type or copy pasta into the text area
         InputUnitsText text ->
@@ -79,17 +114,30 @@ view model =
                                 [ div [ class "mdl-textfield mdl-js-textfield", style "padding" "16px" ]
                                     [ textarea
                                         [ class "mdl-textfield__input"
-                                        , rows 10
+                                        , rows 2
                                         , placeholder "Paste claims text here"
                                         , required True
                                         , onInput InputUnitsText
                                         ]
                                         [ text model.unitsText ]
                                     ]
+                                    , div [ class "mdl-card__supporting-text" ][
+                                         div [ class "textarea_label" ] [ text "Starting Units Count:"]
+                                         , text (String.fromInt (String.length model.unitsText))
+                                     ]
                                     , div [ class "mdl-card__supporting-text" ]
                                         [ div [ class "textarea_label" ] [ text "Remaining Units:"]
-                                        , text model.remainingUnits
+                                        , textarea
+                                            [ class "mdl-textfield__input"
+                                            , rows 2
+                                            , required False
+                                            ]
+                                            [ text model.remainingUnits ]
                                         ]
+                                     , div [ class "mdl-card__supporting-text" ][
+                                         div [ class "textarea_label" ] [ text "Remaining Units Count:"]
+                                         , text (String.fromInt (String.length model.remainingUnits))
+                                     ]
                                 ]
                             ]
                         ]
