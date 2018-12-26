@@ -340,10 +340,32 @@ formatSleepTime : SleepTime -> String
 formatSleepTime sleepTime =
    formatLeadingZero sleepTime.dateTime.hour ++ ":" ++ formatLeadingZero sleepTime.dateTime.minute ++ " " ++ formatLeadingZero sleepTime.dateTime.date ++ "/" ++ formatLeadingZero sleepTime.dateTime.month ++ "/" ++ formatLeadingZero sleepTime.dateTime.year
 
+monthIndexToString : Int -> String
+monthIndexToString index =
+    case index of
+        1  -> "Jan"
+        2  -> "Feb"
+        3  -> "Mar"
+        4  -> "Apr"
+        5  -> "May"
+        6  -> "Jun"
+        7  -> "Jul"
+        8  -> "Aug"
+        9  -> "Sep"
+        10 -> "Oct"
+        11 -> "Nov"
+        _ -> "Dec"
+
+dateIndexToString : Int -> String
+dateIndexToString index =
+    case index of
+        3  -> String.fromInt index ++ "rd"
+        _  -> String.fromInt index ++ "th"
 
 formatSleepTimeMonthDate : GuardSleepTime -> String
 formatSleepTimeMonthDate guardSleepTime =
-    formatLeadingZero guardSleepTime.start.date ++ "-" ++ formatLeadingZero guardSleepTime.start.month
+    -- formatLeadingZero guardSleepTime.start.date ++ "-" ++ formatLeadingZero guardSleepTime.start.month
+    monthIndexToString guardSleepTime.start.month ++ " " ++ dateIndexToString guardSleepTime.start.date
 
 -- minuteToMilliseconds : Int -> Int
 -- minuteToMilliseconds minute =
@@ -456,7 +478,7 @@ buildTableRow guardSleepTime =
         td [class "mdl-data-table__cell--non-numeric"][ text (formatSleepTimeMonthDate guardSleepTime)]
         , td [][text ("#" ++ String.fromInt guardSleepTime.id)]
         , td [][ text (String.fromInt guardSleepTime.totalMinutes) ]
-        , td [][ text (String.fromInt (Tuple.second guardSleepTime.maxMinute)) ]
+        , td [][ text ("index: " ++ (String.fromInt (Tuple.first guardSleepTime.maxMinute)) ++ ", total: " ++ (String.fromInt (Tuple.second guardSleepTime.maxMinute))) ]
     ]
 
 buildTable : Dict Int GuardSleepTime -> Html Msg
