@@ -126,8 +126,6 @@ update msg model =
                     |> List.head
                     |> Maybe.withDefault 0
 
-                smallestUnitLog = log "smallestUnit" smallestUnit
-
             in
             { model | remainingUnits = remainingUnits, smallestUnit = String.fromInt smallestUnit }
 
