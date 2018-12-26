@@ -30,12 +30,14 @@ import Parser exposing (Parser, (|.), (|=), succeed, symbol, float, int, spaces,
 type alias Model =
     { unitsText : String
     , remainingUnits : String
+    , smallestUnit : String
     }
 
 initialModel : Model
 initialModel =
     { unitsText = ""
     , remainingUnits = ""
+    , smallestUnit = "0"
     }
 
 type Msg
@@ -49,16 +51,20 @@ getSameTypeOppositePolarityUnitsBase : List String
 getSameTypeOppositePolarityUnitsBase =
     ["aA" , "bB" , "cC" , "dD" , "eE" , "fF" , "gG" , "hH" , "iI" , "jJ" , "kK" , "lL" , "mM" , "nN" , "oO" , "pP" , "qQ" , "rR" , "sS" , "tT" , "uU" , "vV" , "wW" , "xX" , "yY" , "zZ"]
 
+-- you get all the letters above, and reverse them, and then add 'em so you have both aA and Aa.
 getSameTypeOppositePolarityUnits : List String
 getSameTypeOppositePolarityUnits =
     getSameTypeOppositePolarityUnitsBase
     |> List.map String.reverse
     |> List.append getSameTypeOppositePolarityUnitsBase
+    |> List.sort
 
+-- re-ordering for easier currying
 sourceContainsUnit : String -> String -> Bool
 sourceContainsUnit source unit =
     String.contains unit source
 
+-- date recursion, doh
 replaceIfContainsAny : String -> String
 replaceIfContainsAny source =
     if List.any (sourceContainsUnit source) getSameTypeOppositePolarityUnits then
@@ -67,7 +73,33 @@ replaceIfContainsAny source =
     else
         source
 
--- any isEven [2,3] == True
+-- [Challenge 2 Functions] ---------------------------------------------------------------
+getAnyTypePolarityUnits : List String
+getAnyTypePolarityUnits =
+    ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z"]
+
+-- easier to just replace "a" and "A" in the same function vs. an Array of both
+replaceUpperAndLower : String -> String -> String
+replaceUpperAndLower lowercaseString source =
+    String.replace lowercaseString ""  source
+    |> String.replace (String.toUpper lowercaseString) ""
+
+containsUpperOrLower : String -> String -> Bool
+containsUpperOrLower a b =
+    String.contains a b || String.contains (String.toUpper a) b
+
+-- recursive like the above, but allows you to skip one, like "remove all these letters, but skip 'a' and 'A'"
+replaceIfContainsAnyOptOut : String -> String -> String
+replaceIfContainsAnyOptOut optout source =
+    if List.any (sourceContainsUnit source) getSameTypeOppositePolarityUnits then
+        List.foldl (\unit acc ->
+            if containsUpperOrLower optout unit == False then
+                String.replace unit "" acc
+            else
+                acc) source getSameTypeOppositePolarityUnits
+        |> replaceIfContainsAnyOptOut optout
+    else
+        source
 
 update : Msg -> Model -> Model
 update msg model =
@@ -78,14 +110,26 @@ update msg model =
                 -- ** Challenge 1 **
                 -- Attempt #1: 34220 is too high; figured since I only folded once, heh, worth a shot.
                 -- Attempt #2: 11042 is correct. Recursion FTW.
-                
 
                 remainingUnits =
-                    -- List.foldl (\unit acc -> String.replace unit "" acc) model.unitsText getSameTypeOppositePolarityUnits
                     replaceIfContainsAny model.unitsText
 
+                -- ** Challenge 2 **
+                -- Attempt #1: 49336 is too high... huh...?
+                -- Attempt #2: 47924 is too high... um..... OHHHH, I have to react after, got it. #rtfm
+                -- Attempt #3: 6872
+                
+                smallestUnit =
+                    List.map (\unit -> replaceUpperAndLower unit model.unitsText |> replaceIfContainsAnyOptOut unit) getAnyTypePolarityUnits
+                    |> List.map String.length
+                    |> List.sort
+                    |> List.head
+                    |> Maybe.withDefault 0
+
+                smallestUnitLog = log "smallestUnit" smallestUnit
+
             in
-            { model | remainingUnits = remainingUnits }
+            { model | remainingUnits = remainingUnits, smallestUnit = String.fromInt smallestUnit }
 
         -- when you type or copy pasta into the text area
         InputUnitsText text ->
@@ -102,45 +146,41 @@ view model =
         [ div [ class "demo-card-wide mdl-card mdl-shadow--2dp" ]
             [ div [ class "mdl-card__title" ]
                 [ h2 [ class "mdl-card__title-text" ] [ text "Day 5 - Polymer Parser" ]
-            ]
-            , div[style "width" "100%"][
-                div[class "mdl-grid"][
-                        div [class "mdl-cell mdl-cell--2-col"][
-                            div [ class "mdl-card__supporting-text" ] [
-                                text "1. click 'Load Cached'"
-                                , br [] []
-                                , text "2. click 'Parse Units'"
-                            , form [ action "#" ]
-                                [ div [ class "mdl-textfield mdl-js-textfield", style "padding" "16px" ]
-                                    [ textarea
-                                        [ class "mdl-textfield__input"
-                                        , rows 2
-                                        , placeholder "Paste claims text here"
-                                        , required True
-                                        , onInput InputUnitsText
-                                        ]
-                                        [ text model.unitsText ]
-                                    ]
-                                    , div [ class "mdl-card__supporting-text" ][
-                                         div [ class "textarea_label" ] [ text "Starting Units Count:"]
-                                         , text (String.fromInt (String.length model.unitsText))
-                                     ]
-                                    , div [ class "mdl-card__supporting-text" ]
-                                        [ div [ class "textarea_label" ] [ text "Remaining Units:"]
-                                        , textarea
-                                            [ class "mdl-textfield__input"
-                                            , rows 2
-                                            , required False
-                                            ]
-                                            [ text model.remainingUnits ]
-                                        ]
-                                     , div [ class "mdl-card__supporting-text" ][
-                                         div [ class "textarea_label" ] [ text "Remaining Units Count:"]
-                                         , text (String.fromInt (String.length model.remainingUnits))
-                                     ]
-                                ]
+                ]
+                , div [ class "mdl-card__supporting-text" ] [
+                    text "1. click 'Load Cached'"
+                    , br [] []
+                    , text "2. click 'Parse Units'"
+                , form [ action "#" ]
+                    [ div [ class "mdl-textfield mdl-js-textfield", style "padding" "16px" ]
+                        [ textarea
+                            [ class "mdl-textfield__input"
+                            , rows 2
+                            , placeholder "Paste claims text here"
+                            , required True
+                            , onInput InputUnitsText
                             ]
+                            [ text model.unitsText ]
                         ]
+                        , div [ class "mdl-card__supporting-text" ][
+                                div [ class "textarea_label" ] [ text "Starting Units Count:"]
+                                , text (String.fromInt (String.length model.unitsText))
+                            ]
+                        , div [ class "mdl-card__supporting-text" ]
+                            [ div [ class "textarea_label" ] [ text "Remaining Units:"]
+                            , textarea
+                                [ class "mdl-textfield__input"
+                                , rows 2
+                                , required False
+                                ]
+                                [ text model.remainingUnits ]
+                            ]
+                            , div [ class "mdl-card__supporting-text" ][
+                                div [ class "textarea_label" ] [ text "Remaining Units Count:"]
+                                , text (String.fromInt (String.length model.remainingUnits))
+                            , div [ class "textarea_label" ] [ text "Best Individual Reduce Count:"]
+                            , text model.smallestUnit
+                            ]
                     ]
                 ]   
             , div [ class "mdl-card__actions mdl-card--border" ]
