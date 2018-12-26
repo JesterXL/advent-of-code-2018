@@ -188,12 +188,6 @@ updateScheduleDict dict id sleepTime =
                 Just [sleepTime]
             Just val ->
                 Just (List.append [sleepTime] val)) dict
-
--- type alias GuardSleepTime =
-    -- { id : Int
-    -- , start: DateTime
-    -- , sleep : List DateTime
-    -- , wake : List DateTime }
     
 updateGuardSleepSchedule : Dict Int GuardSleepTime -> Int -> SleepTime -> Dict Int GuardSleepTime
 updateGuardSleepSchedule dict id sleepTime =
@@ -232,32 +226,15 @@ update msg model =
         
         CalculateGuardSleepSchedule ->
             let
-                -- guardSleepScheduleDict =
-                --     List.foldl (\sleepTime acc ->
-                --         case sleepTime.status of
-                --             StartShift guardID ->
-                --                 { acc | id = guardID, parts = updateScheduleDict acc.parts guardID sleepTime }
-                --             Sleep ->
-                --                 { acc | parts = updateScheduleDict acc.parts acc.id sleepTime }
-                --             Wake ->
-                --                 { acc | parts = updateScheduleDict acc.parts acc.id sleepTime }
-                --         ) {id = 0, parts = Dict.empty} model.sleepTimes
-                --         |> .parts
-                --         -- |> Dict.foldl (\guardID parts acc -> ) Dict.empty 
-                -- guardSleepScheduleDictLog = log "guardSleepScheduleDict" guardSleepScheduleDict
-
-                -- type alias GuardSleepTime =
-                -- { id : Int
-                -- , start: DateTime
-                -- , sleep : List DateTime
-                -- , wake : List DateTime }
-
                 -- ** Challenge 1 **
                 -- Attempt #1: 1049, not the right answer, answer too low (id of the guard with most minutes)
                 -- ... whoa, I didn't even read the question, lol, ok, multipled by start minute, my bad
                 -- Attempt #2: 17833, too low
                 -- Attempt #3: 38813. OH YEAH, who's da man!?
 
+                -- ** Challenge 2 **
+                -- Attempt #1: 60459, too low
+                -- Attempt #2: 141071... CORRECT! Man, if I laid off the mead, I would of gotten that on the first try.
 
                 guardSleepScheduleDict =
                     List.foldl (\sleepTime acc ->
@@ -280,10 +257,22 @@ update msg model =
                     |> List.head
                     |> Maybe.withDefault (getGuardSleepTime 0 (DateTime 0 0 0 0 0) [] [])
 
-                biggestSleeperLog = log "biggestSleeper" biggestSleeper
+                -- biggestSleeperLog = log "biggestSleeper" biggestSleeper
                 challenge1 = biggestSleeper.id * (Tuple.first biggestSleeper.maxMinute)
-                challenge1Log = log "challenge1" challenge1
+                -- challenge1Log = log "challenge1" challenge1
 
+
+                mostSleptMinuteCompare =(\a b -> compare (Tuple.second a.maxMinute) (Tuple.second b.maxMinute))
+
+                biggestSleeperOnTheMinute =
+                    Dict.values guardSleepScheduleDict 
+                    |> List.sortWith mostSleptMinuteCompare
+                    |> List.reverse
+                    |> List.head
+                    |> Maybe.withDefault (getGuardSleepTime 0 (DateTime 0 0 0 0 0) [] [])
+                -- biggestSleeperOnTheMinuteLog = log "biggestSleeperOnTheMinute" biggestSleeperOnTheMinute
+                challenge2 = biggestSleeperOnTheMinute.id * (Tuple.first biggestSleeperOnTheMinute.maxMinute)
+                -- challenge2Log = log "challenge2" challenge2
             in
             { model | guardSleepSchedule = guardSleepScheduleDict, challenge1 = challenge1}
             -- model
@@ -364,12 +353,7 @@ dateIndexToString index =
 
 formatSleepTimeMonthDate : GuardSleepTime -> String
 formatSleepTimeMonthDate guardSleepTime =
-    -- formatLeadingZero guardSleepTime.start.date ++ "-" ++ formatLeadingZero guardSleepTime.start.month
     monthIndexToString guardSleepTime.start.month ++ " " ++ dateIndexToString guardSleepTime.start.date
-
--- minuteToMilliseconds : Int -> Int
--- minuteToMilliseconds minute =
---     minute * 60 * 1000
 
 dateDifference : DateTime -> DateTime -> Int
 dateDifference a b =
@@ -403,11 +387,7 @@ sumSleepAndWake guardSleepTime =
                     sleepTime = value
                     -- [jwarden 12.25.2018] Note, this could realllly screw up the math, lol, but... uh.... YOLO
                     wakeTime = Array.get index wake |> Maybe.withDefault defaultDateTime
-                    -- log1 = log "sleepTime" sleepTime
-                    -- log2 = log "wakeTime" wakeTime
                     diff = dateDifference sleepTime wakeTime
-                    -- log3 = log "diff" diff
-                    -- { start = getStartMinute sleepTime wakeTime , total = diff}
                 in
                     diff) sleep
             |> Array.toList
@@ -453,24 +433,8 @@ foldMinuteValues guardSleepTime =
             |> List.reverse
             |> List.head
             |> Maybe.withDefault (0, 0)
-        -- minuteListLog = log "minuteList" minuteList
     in
         minuteList
-
-
--- buildProgressBar : GuardSleepTime -> Html Msg
--- buildProgressBar guardSleepTime =
---     let
---         total = sumSleepAndWake guardSleepTime
---         totallog = log "total" total
---     in
---     div[ style "border" "1px solid #ccc"
---         , style "display" "block"][
---         div [style "background-color" "#9e9e9e" 
---             , style "height" "24px"
---             , style "width" "35%"
---             , style "padding" "0.01em 16px"][]
---     ]
 
 buildTableRow : GuardSleepTime -> Html Msg
 buildTableRow guardSleepTime =
@@ -483,25 +447,26 @@ buildTableRow guardSleepTime =
 
 buildTable : Dict Int GuardSleepTime -> Html Msg
 buildTable guardSleepTimes =
-    table [class "mdl-data-table mdl-js-data-table mdl-data-table--selectable mdl-shadow--2dp" , style "width" "100%"][
-        thead[][
-            tr[][
-                th[class "mdl-data-table__cell--non-numeric"][text "Date"] 
-                , th[][text "ID"] 
-                , th[][text "Total Sleeping Minutes"]
-                , th[][text "Most Slept Minute"]
+    div [class "guard-table"][
+        table [class "mdl-data-table mdl-js-data-table mdl-data-table--selectable mdl-shadow--2dp" , style "width" "100%"][
+            thead[][
+                tr[][
+                    th[class "mdl-data-table__cell--non-numeric"][text "Date"] 
+                    , th[][text "ID"] 
+                    , th[][text "Total Sleeping Minutes"]
+                    , th[][text "Most Slept Minute"]
+                ]
             ]
+            , tbody[] (Dict.values guardSleepTimes |> List.sortBy .totalMinutes |> List.reverse |> List.map buildTableRow)
         ]
-        , tbody[] (Dict.values guardSleepTimes |> List.sortBy .totalMinutes |> List.reverse |> List.map buildTableRow)
     ]
-
+    
 view : Model -> Html Msg
 view model =
     div []
         [ div [ class "demo-card-wide mdl-card mdl-shadow--2dp" ]
             [ div [ class "mdl-card__title" ]
-                [ h2 [ class "mdl-card__title-text" ] [ text "Claims Parser" ]
-                ]
+                [ h2 [ class "mdl-card__title-text" ] [ text "Claims Parser" ]]
             , div [ class "mdl-card__supporting-text" ] [ text "1. click 'Load Cached'", br [] [], text "2. click 'Parse Claims'" ]
             , form [ action "#" ]
                 [ div [ class "mdl-textfield mdl-js-textfield", style "padding" "16px" ]
@@ -526,36 +491,16 @@ view model =
                                div [ style "height" "302px"][]
                             ]
                         , if Dict.size model.guardSleepSchedule > 0 then
-                            div [ class "mdl-cell mdl-cell--4-col" ][
+                            div [ class "mdl-cell mdl-cell--6-col" ][
                                     p[][text "Sleep Schedule:"]
                                     , buildTable model.guardSleepSchedule
                                 ]
                         else
-                            div [ class "mdl-cell mdl-cell--4-col" ][
+                            div [ class "mdl-cell mdl-cell--6-col" ][
                                div [ style "height" "302px"][]
                             ]
-                        , div [class "mdl-cell mdl-cell--4-col"][]
+                        , div [class "mdl-cell mdl-cell--2-col"][]
                     ]
-
-                -- , div [ class "mdl-card__supporting-text" ]
-                --     [ div [ class "textarea_label" ] [ text "Square Inches:" ]
-                --     , text <| String.fromInt model.squareInches
-                --     , div [ class "textarea_label" ] [ text "No Overlap Claim ID:" ]
-                --     , text <| String.fromInt model.noOverlapClaimID
-                --     ]
-                -- , div [][
-                --         Canvas.element
-                --             1000
-                --             1000
-                --             [ style "border" "1px solid black", style "width" "300px"]
-                --             ( Canvas.empty
-                --                 |> Canvas.clearRect 0 0 1000 1000
-                --                 |> renderBackground
-                --                 |> (\cmds -> Array.foldl renderClaim cmds model.claims)
-                --                 |> (\cmds -> Array.foldl renderOverlap cmds model.overlappedRectangles)
-                --                 |> (\cmds -> renderNoOverlap model.noOverlapRectangle cmds)
-                --                 )
-                --     ]
                 ]
             , div [ class "mdl-card__actions mdl-card--border" ]
                 [ a
