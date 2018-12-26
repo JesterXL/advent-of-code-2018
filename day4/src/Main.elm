@@ -33,7 +33,8 @@ type alias Model =
     { sleepTimesText : String
     , sleepTimes : List SleepTime
     , guardSleepSchedule : Dict Int GuardSleepTime
-    , challenge1 : Int
+    , challenge1String : String
+    , challenge2String : String
     }
 
 initialModel : Model
@@ -41,7 +42,8 @@ initialModel =
     { sleepTimesText = ""
     , sleepTimes = []
     , guardSleepSchedule = Dict.empty
-    , challenge1 = 0
+    , challenge1String = ""
+    , challenge2String = ""
     }
 
 type Msg
@@ -53,11 +55,13 @@ type Msg
 
 -- [Challenge 1 Functions] ------------------------------------------------------------
 
+-- the 3 types of guard events that can happen in the source
 type GuardStatus =
     StartShift Int
     | Sleep
     | Wake
 
+-- Elm Dates aren't there yet, heh
 type alias DateTime =
  {  year : Int
     , month : Int
@@ -69,11 +73,14 @@ defaultDateTime : DateTime
 defaultDateTime =
     DateTime 0 0 0 0 0
 
+-- basicall a parsed line, or event, from the input; "when did a guard do something"
 type alias SleepTime = 
     { dateTime : DateTime
     , status : GuardStatus
     }
 
+-- combine the SleepTimes into something useful, when did they start their shift, a list of when they went to sleep,
+-- a list when they wake up, how many minutes total they slept for, and whatever the max minutes are with the index
 type alias GuardSleepTime =
     { id : Int
     , start: DateTime
@@ -82,6 +89,7 @@ type alias GuardSleepTime =
     , totalMinutes : Int
     , maxMinute : (Int, Int)  }
 
+-- helper method to calculate the totalMinutes on a GuardSleepTime
 getGuardSleepTime : Int -> DateTime -> List DateTime -> List DateTime -> GuardSleepTime
 getGuardSleepTime id start sleep wake =
     let
@@ -98,7 +106,11 @@ parseSleepTimes string =
     |> List.map (Parser.run parseSleepTimeString)
     |> List.map (Result.withDefault (getSleepTime 0 0 0 0 0 (StartShift 0) ))
 
-
+-- all the parse functions are using Elm's parsing syntax
+-- it's supposed to have better error handling than you'd get with JSON for example
+-- or your own string parse. It's... interesting. Feels quite imperative, but I get it.
+-- Once you build one, you start to get how you can make it pure. However, the docs are... non-existent.
+-- Either find an example, or dive into source.
 parseLeadingZero : Parser Int
 parseLeadingZero =
     oneOf
@@ -136,6 +148,8 @@ parseGuardStatus =
         , succeed Wake
             |. keyword "wakes up"]
 
+-- since I don't have moment.js, I have to make compare methods, then put them together below
+-- to compare dates being greater than/less than/equal to each other 
 compareDateTimeYear : DateTime -> DateTime -> Order
 compareDateTimeYear a b =
     compare a.year b.year
@@ -180,6 +194,7 @@ compareGuardSleepTimes : GuardSleepTime -> GuardSleepTime -> Order
 compareGuardSleepTimes a b =
     compareDateTimes a.start b.start
 
+-- helps when folding to combine all the sleep times together
 updateScheduleDict : Dict Int (List SleepTime) -> Int -> SleepTime -> Dict Int (List SleepTime)
 updateScheduleDict dict id sleepTime =
     Dict.update id (\sleepTimesMaybe ->
@@ -189,6 +204,7 @@ updateScheduleDict dict id sleepTime =
             Just val ->
                 Just (List.append [sleepTime] val)) dict
     
+-- same as above, helps when folding all SleepTimes together into a GuardSleepTime
 updateGuardSleepSchedule : Dict Int GuardSleepTime -> Int -> SleepTime -> Dict Int GuardSleepTime
 updateGuardSleepSchedule dict id sleepTime =
     Dict.update id (\sleepTimesMaybe ->
@@ -259,6 +275,7 @@ update msg model =
 
                 -- biggestSleeperLog = log "biggestSleeper" biggestSleeper
                 challenge1 = biggestSleeper.id * (Tuple.first biggestSleeper.maxMinute)
+                challenge1String = "Biggest sleeper ID: " ++ String.fromInt biggestSleeper.id ++ " times minute index: " ++ String.fromInt (Tuple.first biggestSleeper.maxMinute)
                 -- challenge1Log = log "challenge1" challenge1
 
 
@@ -272,9 +289,10 @@ update msg model =
                     |> Maybe.withDefault (getGuardSleepTime 0 (DateTime 0 0 0 0 0) [] [])
                 -- biggestSleeperOnTheMinuteLog = log "biggestSleeperOnTheMinute" biggestSleeperOnTheMinute
                 challenge2 = biggestSleeperOnTheMinute.id * (Tuple.first biggestSleeperOnTheMinute.maxMinute)
+                challenge2String = "On the minute sleeper ID: " ++ String.fromInt biggestSleeperOnTheMinute.id ++ " times minute index: " ++ String.fromInt (Tuple.first biggestSleeperOnTheMinute.maxMinute)
                 -- challenge2Log = log "challenge2" challenge2
             in
-            { model | guardSleepSchedule = guardSleepScheduleDict, challenge1 = challenge1}
+            { model | guardSleepSchedule = guardSleepScheduleDict, challenge1String = challenge1String, challenge2String = challenge2String}
             -- model
 
         -- when you type or copy pasta into the text area
@@ -284,6 +302,8 @@ update msg model =
         -- put the sleep strings function text into the text area
         LoadFromCache ->
             { model | sleepTimesText = sleepTimesCacheString }
+
+-- Everything below is basically UI stuff.
 
 getStatusString : GuardStatus -> String
 getStatusString guardStatus =
@@ -466,21 +486,37 @@ view model =
     div []
         [ div [ class "demo-card-wide mdl-card mdl-shadow--2dp" ]
             [ div [ class "mdl-card__title" ]
-                [ h2 [ class "mdl-card__title-text" ] [ text "Claims Parser" ]]
-            , div [ class "mdl-card__supporting-text" ] [ text "1. click 'Load Cached'", br [] [], text "2. click 'Parse Claims'" ]
-            , form [ action "#" ]
-                [ div [ class "mdl-textfield mdl-js-textfield", style "padding" "16px" ]
-                    [ textarea
-                        [ class "mdl-textfield__input"
-                        , rows 3
-                        , placeholder "Paste claims text here"
-                        , required True
-                        , onInput InputSleepTimesText
+                [ h2 [ class "mdl-card__title-text" ] [ text "Claims Parser" ]
+            ]
+            , div[style "width" "100%"][
+                div[class "mdl-grid"][
+                        div [class "mdl-cell mdl-cell--2-col"][
+                            div [ class "mdl-card__supporting-text" ] [
+                                text "1. click 'Load Cached'"
+                                , br [] []
+                                , text "2. click 'Parse Sleep Times'"
+                                , br [] []
+                                , text "3. click 'Calculate Sleep Schedule'" ]
+                            , form [ action "#" ]
+                                [ div [ class "mdl-textfield mdl-js-textfield", style "padding" "16px" ]
+                                    [ textarea
+                                        [ class "mdl-textfield__input"
+                                        , rows 10
+                                        , placeholder "Paste claims text here"
+                                        , required True
+                                        , onInput InputSleepTimesText
+                                        ]
+                                        [ text model.sleepTimesText ]
+                                    ]
+                                    , div [ class "mdl-card__supporting-text" ]
+                                        [ div [ class "textarea_label" ] [ text model.challenge1String]
+                                        , br [][]
+                                        , br [][]
+                                        , div [ class "textarea_label" ] [ text model.challenge2String ]
+                                        ]
+                                ]
                         ]
-                        [ text model.sleepTimesText ]
-                    ]
-                    , div[class "mdl-grid"][
-                        if List.length model.sleepTimes > 0 then
+                        , if List.length model.sleepTimes > 0 then
                             div [ class "mdl-cell mdl-cell--4-col" ][
                                 p[][text "Sleep Times:"]
                                 , ul[ class "event-list mdl-list"]
@@ -488,7 +524,7 @@ view model =
                             ]
                         else
                             div [ class "mdl-cell mdl-cell--4-col" ][
-                               div [ style "height" "302px"][]
+                                div [ style "height" "490px"][]
                             ]
                         , if Dict.size model.guardSleepSchedule > 0 then
                             div [ class "mdl-cell mdl-cell--6-col" ][
@@ -497,11 +533,10 @@ view model =
                                 ]
                         else
                             div [ class "mdl-cell mdl-cell--6-col" ][
-                               div [ style "height" "302px"][]
+                                div [ class "guard-table"][]
                             ]
-                        , div [class "mdl-cell mdl-cell--2-col"][]
                     ]
-                ]
+                ]   
             , div [ class "mdl-card__actions mdl-card--border" ]
                 [ a
                     [ class "mdl-button mdl-button--colored mdl-js-button mdl-js-ripple-effect"
