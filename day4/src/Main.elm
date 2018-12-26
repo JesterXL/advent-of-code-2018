@@ -17,7 +17,7 @@ import Browser
 import Char exposing (fromCode, toCode)
 import Debug exposing (log)
 import Dict exposing (Dict, update)
-import Html exposing (Html, a, br, button, div, form, h2, i, input, label, text, textarea, ul, li, span, p)
+import Html exposing (Html, a, br, button, div, form, h2, i, input, label, text, textarea, ul, li, span, p, table, tr, td, thead, tbody, th)
 import Html.Attributes exposing (action, class, for, placeholder, required, rows, style, type_)
 import Html.Events exposing (onClick, onInput)
 import List exposing (filter, foldl, head, length, map, partition, reverse)
@@ -32,40 +32,68 @@ import Parser exposing (Parser, (|.), (|=), succeed, symbol, float, int, spaces,
 type alias Model =
     { sleepTimesText : String
     , sleepTimes : List SleepTime
+    , guardSleepSchedule : Dict Int GuardSleepTime
     }
-
-type GuardStatus =
-    StartShift Int
-    | Sleep
-    | WakeUp
 
 initialModel : Model
 initialModel =
     { sleepTimesText = ""
     , sleepTimes = []
+    , guardSleepSchedule = Dict.empty
     }
 
 type Msg
     = InputSleepTimesText String -- when you type or paste in the text area
     | ParseSleepTimesText -- RUN THE MAGIC
     | LoadFromCache -- loads strings vs. you copy pasta
+    | CalculateGuardSleepSchedule
 
 
 -- [Challenge 1 Functions] ------------------------------------------------------------
 
-parseSleepTimes string =
-    split "\n" string
-    |> List.map (Parser.run parseSleepTimeString)
-    |> List.map (Result.withDefault (SleepTime 0 0 0 0 0 (StartShift 0)))
+type GuardStatus =
+    StartShift Int
+    | Sleep
+    | Wake
 
-type alias SleepTime = 
-    { year : Int
+type alias DateTime =
+ {  year : Int
     , month : Int
     , date : Int
     , hour : Int
-    , minute : Int 
+    , minute : Int }
+
+defaultDateTime : DateTime
+defaultDateTime =
+    DateTime 0 0 0 0 0
+
+type alias SleepTime = 
+    { dateTime : DateTime
     , status : GuardStatus
     }
+
+type alias GuardSleepTime =
+    { id : Int
+    , start: DateTime
+    , sleep : List DateTime
+    , wake : List DateTime
+    , totalMinutes : Int }
+
+getGuardSleepTime : Int -> DateTime -> List DateTime -> List DateTime -> GuardSleepTime
+getGuardSleepTime id start sleep wake =
+    let
+        base = GuardSleepTime id start sleep wake 0
+    in
+        { base | totalMinutes = (sumSleepAndWake base)}
+
+-- getSleepTime : Int -> Int -> Int -> Int -> Int -> GuardStatus -> SleepTime
+getSleepTime year month date hour minute status =
+    SleepTime (DateTime year month date hour minute) status
+
+parseSleepTimes string =
+    split "\n" string
+    |> List.map (Parser.run parseSleepTimeString)
+    |> List.map (Result.withDefault (getSleepTime 0 0 0 0 0 (StartShift 0) ))
 
 
 parseLeadingZero : Parser Int
@@ -79,7 +107,7 @@ parseLeadingZero =
 
 parseSleepTimeString : Parser SleepTime
 parseSleepTimeString =
-    succeed SleepTime
+    succeed getSleepTime
         |. symbol "["
         |= int
         |. symbol "-"
@@ -102,44 +130,89 @@ parseGuardStatus =
             |. symbol " begins shift"
         , succeed Sleep
             |. keyword "falls asleep"
-        , succeed WakeUp
+        , succeed Wake
             |. keyword "wakes up"]
 
-compareSleepTimeYear : SleepTime -> SleepTime -> Order
-compareSleepTimeYear a b =
+compareDateTimeYear : DateTime -> DateTime -> Order
+compareDateTimeYear a b =
     compare a.year b.year
 
-compareSleepTimeMonth : SleepTime -> SleepTime -> Order
-compareSleepTimeMonth a b =
+compareDateTimeMonth : DateTime -> DateTime -> Order
+compareDateTimeMonth a b =
     compare a.month b.month
 
-compareSleepTimeDate : SleepTime -> SleepTime -> Order
-compareSleepTimeDate a b =
+compareDateTimeDate : DateTime -> DateTime -> Order
+compareDateTimeDate a b =
     compare a.date b.date
 
-compareSleepTimeHour : SleepTime -> SleepTime -> Order
-compareSleepTimeHour a b =
+compareDateTimeHour : DateTime -> DateTime -> Order
+compareDateTimeHour a b =
     compare a.hour b.hour
 
-compareSleepTimeMinute : SleepTime -> SleepTime -> Order
-compareSleepTimeMinute a b =
+compareDateTimeMinute : DateTime -> DateTime -> Order
+compareDateTimeMinute a b =
     compare a.minute b.minute
 
+compareDateTimes : DateTime -> DateTime -> Order
+compareDateTimes a b =
+    case compareDateTimeMonth a b of
+            EQ ->
+                case compareDateTimeDate a b of
+                    EQ ->
+                        case compareDateTimeHour a b of
+                            EQ ->
+                                compareDateTimeMinute a b
+                            _ ->
+                                compareDateTimeHour a b
+                    _ ->
+                        compareDateTimeDate a b
+            _ ->
+                compareDateTimeMonth a b
+
 compareSleepTimes : SleepTime -> SleepTime -> Order
-compareSleepTimes a b =
-    case compareSleepTimeMonth a b of
-        EQ ->
-            case compareSleepTimeDate a b of
-                EQ ->
-                    case compareSleepTimeHour a b of
-                        EQ ->
-                            compareSleepTimeMinute a b
-                        _ ->
-                            compareSleepTimeHour a b
-                _ ->
-                    compareSleepTimeDate a b
-        _ ->
-            compareSleepTimeMonth a b
+compareSleepTimes sleepTimeA sleepTimeB =
+    compareDateTimes sleepTimeA.dateTime sleepTimeB.dateTime
+
+compareGuardSleepTimes : GuardSleepTime -> GuardSleepTime -> Order
+compareGuardSleepTimes a b =
+    compareDateTimes a.start b.start
+
+updateScheduleDict : Dict Int (List SleepTime) -> Int -> SleepTime -> Dict Int (List SleepTime)
+updateScheduleDict dict id sleepTime =
+    Dict.update id (\sleepTimesMaybe ->
+        case sleepTimesMaybe of
+            Nothing ->
+                Just [sleepTime]
+            Just val ->
+                Just (List.append [sleepTime] val)) dict
+
+-- type alias GuardSleepTime =
+    -- { id : Int
+    -- , start: DateTime
+    -- , sleep : List DateTime
+    -- , wake : List DateTime }
+    
+updateGuardSleepSchedule : Dict Int GuardSleepTime -> Int -> SleepTime -> Dict Int GuardSleepTime
+updateGuardSleepSchedule dict id sleepTime =
+    Dict.update id (\sleepTimesMaybe ->
+        case sleepTimesMaybe of
+            Nothing ->
+                case sleepTime.status of
+                    StartShift guardID ->
+                        Just (getGuardSleepTime id sleepTime.dateTime [] [])
+                    Sleep ->
+                        Just (getGuardSleepTime id defaultDateTime [sleepTime.dateTime] [])
+                    Wake ->
+                        Just (getGuardSleepTime id defaultDateTime [] [sleepTime.dateTime])
+            Just guardSleepTime ->
+                -- Just (List.append [sleepTime] val)) dict
+                case sleepTime.status of
+                    StartShift guardID ->
+                        Just { guardSleepTime | start = sleepTime.dateTime }
+                    Sleep ->
+                        Just { guardSleepTime | sleep = List.append [sleepTime.dateTime] guardSleepTime.sleep }
+                    Wake ->
+                        Just { guardSleepTime | wake = List.append [sleepTime.dateTime] guardSleepTime.wake }) dict
 
 
 update : Msg -> Model -> Model
@@ -151,12 +224,48 @@ update msg model =
                 sleepTimes =
                     parseSleepTimes sleepTimesCacheString
                     |> List.sortWith compareSleepTimes
-                
-                sleepTimesLog = log "sleepTimes" sleepTimes
-
-
             in
             { model | sleepTimes = sleepTimes }
+        
+        CalculateGuardSleepSchedule ->
+            let
+                -- guardSleepScheduleDict =
+                --     List.foldl (\sleepTime acc ->
+                --         case sleepTime.status of
+                --             StartShift guardID ->
+                --                 { acc | id = guardID, parts = updateScheduleDict acc.parts guardID sleepTime }
+                --             Sleep ->
+                --                 { acc | parts = updateScheduleDict acc.parts acc.id sleepTime }
+                --             Wake ->
+                --                 { acc | parts = updateScheduleDict acc.parts acc.id sleepTime }
+                --         ) {id = 0, parts = Dict.empty} model.sleepTimes
+                --         |> .parts
+                --         -- |> Dict.foldl (\guardID parts acc -> ) Dict.empty 
+                -- guardSleepScheduleDictLog = log "guardSleepScheduleDict" guardSleepScheduleDict
+
+                -- type alias GuardSleepTime =
+                -- { id : Int
+                -- , start: DateTime
+                -- , sleep : List DateTime
+                -- , wake : List DateTime }
+
+                guardSleepScheduleDict =
+                    List.foldl (\sleepTime acc ->
+                        case sleepTime.status of
+                            StartShift guardID ->
+                                { acc | id = guardID, parts = updateGuardSleepSchedule acc.parts guardID sleepTime }
+                            Sleep ->
+                                { acc | parts = updateGuardSleepSchedule acc.parts acc.id sleepTime }
+                            Wake ->
+                                { acc | parts = updateGuardSleepSchedule acc.parts acc.id sleepTime }
+                        ) {id = 0, parts = Dict.empty} model.sleepTimes
+                        |> .parts
+                        |> Dict.map (\k v -> { v | totalMinutes = sumSleepAndWake v})
+                -- guardSleepScheduleDictLog = log "guardSleepScheduleDict" guardSleepScheduleDict
+
+            in
+            { model | guardSleepSchedule = guardSleepScheduleDict }
+            -- model
 
         -- when you type or copy pasta into the text area
         InputSleepTimesText text ->
@@ -171,7 +280,7 @@ getStatusString guardStatus =
     case guardStatus of
         Sleep ->
             "Sleep"
-        WakeUp ->
+        Wake ->
             "Wakes"
         StartShift id ->
             (String.fromInt id) ++ " begins shift"
@@ -181,7 +290,7 @@ getStatusIcon guardStatus =
     case guardStatus of
         Sleep ->
             "hotel"
-        WakeUp ->
+        Wake ->
             "local_cafe"
         StartShift id ->
             "person"
@@ -208,7 +317,95 @@ formatLeadingZero num =
 
 formatSleepTime : SleepTime -> String
 formatSleepTime sleepTime =
-   formatLeadingZero sleepTime.hour ++ ":" ++ formatLeadingZero sleepTime.minute ++ " " ++ formatLeadingZero sleepTime.date ++ "/" ++ formatLeadingZero sleepTime.month ++ "/" ++ formatLeadingZero sleepTime.year
+   formatLeadingZero sleepTime.dateTime.hour ++ ":" ++ formatLeadingZero sleepTime.dateTime.minute ++ " " ++ formatLeadingZero sleepTime.dateTime.date ++ "/" ++ formatLeadingZero sleepTime.dateTime.month ++ "/" ++ formatLeadingZero sleepTime.dateTime.year
+
+
+formatSleepTimeMonthDate : GuardSleepTime -> String
+formatSleepTimeMonthDate guardSleepTime =
+    formatLeadingZero guardSleepTime.start.date ++ "-" ++ formatLeadingZero guardSleepTime.start.month
+
+-- minuteToMilliseconds : Int -> Int
+-- minuteToMilliseconds minute =
+--     minute * 60 * 1000
+
+dateDifference : DateTime -> DateTime -> Int
+dateDifference a b =
+    case compareDateTimes a b of
+        LT ->
+            b.minute - a.minute
+        GT ->
+            a.minute - b.minute
+        EQ ->
+            0
+
+getStartMinute : DateTime -> DateTime -> Int
+getStartMinute a b =
+    case compareDateTimes a b of
+        LT ->
+            a.minute
+        GT ->
+            b.minute
+        EQ ->
+            a.minute
+
+sumSleepAndWake : GuardSleepTime -> Int
+sumSleepAndWake guardSleepTime =
+    let
+        sleep = Array.fromList guardSleepTime.sleep
+        wake = Array.fromList guardSleepTime.wake
+        -- log0 = log "start --" "start"
+        total =
+            Array.indexedMap (\index value ->
+                let
+                    sleepTime = value
+                    -- [jwarden 12.25.2018] Note, this could realllly screw up the math, lol, but... uh.... YOLO
+                    wakeTime = Array.get index wake |> Maybe.withDefault defaultDateTime
+                    -- log1 = log "sleepTime" sleepTime
+                    -- log2 = log "wakeTime" wakeTime
+                    diff = dateDifference sleepTime wakeTime
+                    -- log3 = log "diff" diff
+                    -- { start = getStartMinute sleepTime wakeTime , total = diff}
+                in
+                    diff) sleep
+            |> Array.toList
+            |> List.sum
+    in
+        total
+
+-- buildProgressBar : GuardSleepTime -> Html Msg
+-- buildProgressBar guardSleepTime =
+--     let
+--         total = sumSleepAndWake guardSleepTime
+--         totallog = log "total" total
+--     in
+--     div[ style "border" "1px solid #ccc"
+--         , style "display" "block"][
+--         div [style "background-color" "#9e9e9e" 
+--             , style "height" "24px"
+--             , style "width" "35%"
+--             , style "padding" "0.01em 16px"][]
+--     ]
+
+buildTableRow : GuardSleepTime -> Html Msg
+buildTableRow guardSleepTime =
+    tr[][
+        td [][ text (formatSleepTimeMonthDate guardSleepTime)]
+        , td [][text ("#" ++ String.fromInt guardSleepTime.id)]
+        , td [class "mdl-data-table__cell--non-numeric"][ text (String.fromInt guardSleepTime.totalMinutes) ]
+    ]
+
+buildTable : Dict Int GuardSleepTime -> Html Msg
+buildTable guardSleepTimes =
+    table [class "mdl-data-table mdl-js-data-table mdl-data-table--selectable mdl-shadow--2dp" , style "width" "100%"][
+        thead[][
+            tr[][
+               th[][text "Date"] 
+               , th[][text "ID"] 
+               , th[class "mdl-data-table__cell--non-numeric"][text "Minute"] 
+            ]
+        ]
+        , tbody[] (Dict.values guardSleepTimes |> List.sortBy .totalMinutes |> List.reverse |> List.map buildTableRow)
+    ]
 
 view : Model -> Html Msg
 view model =
@@ -229,14 +426,29 @@ view model =
                         ]
                         [ text model.sleepTimesText ]
                     ]
-                    , if List.length model.sleepTimes > 0 then
-                        div [ class "mdl-card__supporting-text" ][
-                            p[][text "Events:"]
-                            , ul[ class "event-list mdl-list"]
-                            (List.map sleepTimeListItem model.sleepTimes)
-                        ]
-                    else
-                        div [][]
+                    , div[class "mdl-grid"][
+                        if List.length model.sleepTimes > 0 then
+                            div [ class "mdl-cell mdl-cell--4-col" ][
+                                p[][text "Sleep Times:"]
+                                , ul[ class "event-list mdl-list"]
+                                (List.map sleepTimeListItem model.sleepTimes)
+                            ]
+                        else
+                            div [ class "mdl-cell mdl-cell--4-col" ][
+                               div [ style "height" "302px"][]
+                            ]
+                        , if Dict.size model.guardSleepSchedule > 0 then
+                            div [ class "mdl-cell mdl-cell--4-col" ][
+                                    p[][text "Sleep Schedule:"]
+                                    , buildTable model.guardSleepSchedule
+                                ]
+                        else
+                            div [ class "mdl-cell mdl-cell--4-col" ][
+                               div [ style "height" "302px"][]
+                            ]
+                        , div [class "mdl-cell mdl-cell--4-col"][]
+                    ]
+
                 -- , div [ class "mdl-card__supporting-text" ]
                 --     [ div [ class "textarea_label" ] [ text "Square Inches:" ]
                 --     , text <| String.fromInt model.squareInches
@@ -262,12 +474,17 @@ view model =
                     [ class "mdl-button mdl-button--colored mdl-js-button mdl-js-ripple-effect"
                     , onClick LoadFromCache
                     ]
-                    [ text "Load Cached" ]
+                    [ text "1. Load Cached" ]
                 , a
                     [ class "mdl-button mdl-button--colored mdl-js-button mdl-js-ripple-effect"
                     , onClick ParseSleepTimesText
                     ]
-                    [ text "Parse Sleep Times" ]
+                    [ text "2. Parse Sleep Times" ]
+                , a
+                    [ class "mdl-button mdl-button--colored mdl-js-button mdl-js-ripple-effect"
+                    , onClick CalculateGuardSleepSchedule
+                    ]
+                    [ text "3. Calculate Sleep Schedule" ]
                 ]
             ]
         ]
