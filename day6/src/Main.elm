@@ -30,15 +30,13 @@ import CanvasColor as Color exposing (Color)
 
 type alias Model =
     { coordinatesText : String
-    , coordinates : List Point
-    , coordinateFloats : List PointFloat
+    , coordinates : List Coordinate
     }
 
 initialModel : Model
 initialModel =
     { coordinatesText = ""
     , coordinates = []
-    , coordinateFloats = []
     }
 
 type Msg
@@ -56,6 +54,11 @@ type alias PointFloat =
     { x : Float
     , y: Float }
 
+type alias Coordinate =
+    { point : Point
+    , pointFloat : PointFloat
+    , label : String }
+
 intListToPoint : List Int -> Point
 intListToPoint intList =
     let
@@ -65,11 +68,19 @@ intListToPoint intList =
     in
     Point x y
 
+pointToCoordinate : Int -> Point -> Coordinate
+pointToCoordinate index point =
+    let
+        label = Array.get index getCoordinateLabels |> Maybe.withDefault "?"
+    in
+        Coordinate point (PointFloat (toFloat point.x) (toFloat point.y)) label
+    
+
 add100 : Int -> Int
 add100 value =
     value + 100
 
--- parseCoordinates : String -> List (List (Int, Int))
+-- parseCoordinates : String -> List Coordinate
 parseCoordinates string =
     String.split "\n" string
     |> List.map (String.split ",")
@@ -78,25 +89,36 @@ parseCoordinates string =
     |> List.map (List.map (Maybe.withDefault 0))
     |> List.map (List.map add100)
     |> List.map intListToPoint
+    |> List.indexedMap pointToCoordinate
 
--- getManhattanDistance =
+{-
+    [A, 0, 0, 0, 0, 0, 0]
+  , [0, 0, 0, 0, 0, 0, 0]  
+  , [0, 0, 0, 0, 0, 0, 0] 
+  , [0, 0, 0, 0, 0, 0, 0] 
+  , [0, 0, 0, 0, B, 0, 0] 
+  , [0, 0, 0, 0, 0, 0, 0] 
+  , [0, 0, 0, 0, 0, 0, 0] 
+  , [0, 0, 0, 0, 0, 0, 0] 
+-}
 
--- function getToroidManhattanDistance( node1, node2, size )
--- {
---     var dx = Math.min( Math.abs( node1.x - node2.x ), size - Math.abs( node2.x - node1.x ) );
---     var dy = Math.min( Math.abs( node1.y - node2.y ), size - Math.abs( node2.y - node1.y ) );
---     return dx + dy;    
--- }
+getManhattanDistance : Point -> Point -> Int -> Int
+getManhattanDistance point1 point2 size =
+    let
+        x1 = abs point1.x - point2.x
+        x2 = abs point2.x - point1.x
+        dx = min x1 (size - x2)
+        y1 = abs point1.y - point2.y
+        y2 = abs point2.y - point1.y
+        dy = min y1 (size - y2)
+    in
+        dx + dy
 
+getCoordinateLabels : Array String
+getCoordinateLabels =
+    Array.fromList ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z"
+                    , "AA", "BB", "CC", "DD", "EE", "FF", "GG", "HH", "II", "JJ", "KK", "LL", "MM", "NN", "OO", "PP", "QQ", "RR", "SS", "TT", "UU", "VV", "WW", "XX", "YY", "ZZ" ]
 
--- module.exports = function distance(a, b) {
---   var distance = 0
---   var dimensions = Math.max(a.length, b.length)
---   for (var i = 0; i < dimensions; i++) {
---     distance += Math.abs((b[i] || 0) - (a[i] || 0))
---   }
---   return distance
--- }
 
 update : Msg -> Model -> Model
 update msg model =
@@ -111,8 +133,13 @@ update msg model =
                 coordinateFloats =
                     coordinatesToFloats coordinates
 
+                -- it works, noice!
+                -- test1 = getManhattanDistance (Point 0 0) (Point 4 4) 1
+                -- test1log = log "test1" test1
+
             in
-            { model | coordinates = coordinates, coordinateFloats = coordinateFloats }
+            { model | coordinates = coordinates }
+            -- model
 
         -- when you type or copy pasta into the text area
         InputCoordinatesText text ->
@@ -164,17 +191,18 @@ getColsFloat =
 
 renderBackground width height cmds =
     cmds
-        |> Canvas.fillStyle canvasBackgroundColor
-        |> Canvas.fillRect 0 0 width height
+    |> Canvas.fillStyle canvasBackgroundColor
+    |> Canvas.fillRect 0 0 width height
 
-drawCoordinate point cmds =
+drawCoordinate : Coordinate -> Commands -> Commands
+drawCoordinate coordinate cmds =
     cmds
     |> Canvas.fillStyle canvasCoordinateDotColor
-    |> Canvas.fillCircle point.x point.y 4
+    |> Canvas.fillCircle coordinate.pointFloat.x coordinate.pointFloat.y 4
 
-coordinatesToFloats : List Point -> List PointFloat
+coordinatesToFloats : List Coordinate -> List PointFloat
 coordinatesToFloats coordinates =
-    List.map (\point -> PointFloat (toFloat point.x) (toFloat point.y)) coordinates
+    List.map (\coordinate -> PointFloat (toFloat coordinate.point.x) (toFloat coordinate.point.y)) coordinates
 
 
 
@@ -229,7 +257,7 @@ view model =
                             ( Canvas.empty
                                 |> Canvas.clearRect 0 0 getColsFloat getRowsFloat
                                 |> renderBackground getColsFloat getRowsFloat
-                                |> (\cmds -> List.foldl drawCoordinate cmds model.coordinateFloats)
+                                |> (\cmds -> List.foldl drawCoordinate cmds model.coordinates)
                                 |> Canvas.fillText "Hello world" 50 100 Nothing
                                 -- , Canvas.text
                                 --     [ Canvas.align Canvas.Right
