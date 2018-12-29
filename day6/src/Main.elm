@@ -32,6 +32,7 @@ type alias Model =
     { coordinatesText : String
     , coordinates : List Coordinate
     , tiles : List Coordinate
+    , labelColors : Dict String Color
     }
 
 initialModel : Model
@@ -39,6 +40,7 @@ initialModel =
     { coordinatesText = ""
     , coordinates = []
     , tiles = []
+    , labelColors = getLabelColors
     }
 
 type Msg
@@ -447,6 +449,22 @@ plotColors =
     , Color.rgb 33 33 33
     , Color.rgb 38 50 56 ]
 
+getLabelColors : Dict String Color
+getLabelColors =
+    let
+        colors = plotColors
+        labelColorDict =
+            Array.indexedMap (\index label ->
+                let
+                    color = Array.get index colors |> Maybe.withDefault (Color.rgb 0 0 0)
+                in
+                    (label, color)) getCoordinateLabels
+            |> Array.toList
+            |> Dict.fromList
+    in
+    labelColorDict
+    
+
 drawPlot : Coordinate -> Color -> Commands -> Commands
 drawPlot coordinate color cmds =
     cmds
@@ -465,21 +483,45 @@ drawTile tile labelColorDict cmds =
     |> drawPlot tile (getColorElseWhite tile.label labelColorDict)
     -- |> drawPlot tile (Color.rgb 255 255 255)
 
-drawTiles : List Coordinate -> Commands -> Commands
-drawTiles tiles cmds =
-    let
-        colors = plotColors
-        labelColorDict =
-            Array.indexedMap (\index label ->
-                let
-                    color = Array.get index colors |> Maybe.withDefault (Color.rgb 0 0 0)
-                in
-                    (label, color)) getCoordinateLabels
-            |> Array.toList
-            |> Dict.fromList
-    in
-        List.foldl (\tile acc -> drawTile tile labelColorDict acc) cmds tiles
+drawTiles : List Coordinate -> Dict String Color -> Commands -> Commands
+drawTiles tiles labelColors cmds =
+        List.foldl (\tile acc -> drawTile tile labelColors acc) cmds tiles
 
+ 
+--  drawCoordinate : Coordinate -> Commands -> Commands
+-- drawCoordinate coordinate cmds =
+--     cmds
+--     |> Canvas.fillStyle (Color.rgb 0 0 0)
+--     -- |> Canvas.fillCircle coordinate.pointFloat.x coordinate.pointFloat.y 4
+--     |> Canvas.fillRect coordinate.pointFloat.x (coordinate.pointFloat.y - 12) 20 14
+--     |> Canvas.fillStyle canvasCoordinateDotColor
+--     |> Canvas.font "14px Helvetica"
+--     |> Canvas.fillText coordinate.label coordinate.pointFloat.x coordinate.pointFloat.y Nothing
+
+drawLegend : Dict String Color -> Int -> Int -> Coordinate -> Commands -> Commands
+drawLegend labelColors x y coordinate cmds =
+    let
+        color = (getColorElseWhite coordinate.label labelColors)
+        xFloat = toFloat x
+        yFloat = toFloat y
+    in
+    cmds
+    |> Canvas.fillStyle color
+    |> Canvas.fillRect xFloat yFloat 20 11
+    |> Canvas.fillStyle (Color.rgb 255 255 255)
+    |> Canvas.font "10px Helvetica"
+    |> Canvas.fillText coordinate.label xFloat (yFloat + 10) Nothing
+
+-- (\cmds -> List.foldl (drawLegend model.labelColors) cmds model.coordinates)
+drawLegendFromCoordinates labelColors startX startY coordinates cmds =
+    List.indexedMap (\index coord -> (startY + (12 * index), coord)) coordinates
+    |> List.foldl (\tuple acc ->
+        let
+            y = Tuple.first tuple
+            coord = Tuple.second tuple
+        in
+        acc |> drawLegend labelColors startX y coord) cmds
+        
 
 view : Model -> Html Msg
 view model =
@@ -508,12 +550,16 @@ view model =
                         Canvas.element
                             getCols
                             getRows
-                            [ style "border" "1px solid black", style "width" "600px"]
+                            [ style "border" "1px solid black"
+                                -- , style "width" "600px"
+                                ]
                             ( Canvas.empty
                                 |> Canvas.clearRect 0 0 getColsFloat getRowsFloat
                                 |> renderBackground getColsFloat getRowsFloat
-                                |> (\cmds -> drawTiles model.tiles cmds)
+                                |> (\cmds -> drawTiles model.tiles model.labelColors cmds)
                                 |> (\cmds -> List.foldl drawCoordinate cmds model.coordinates)
+                                |> (drawLegendFromCoordinates model.labelColors 580 0 model.coordinates)
+                                -- |> (\cmds -> List.foldl (drawLegend model.labelColors) cmds model.coordinates)
                             )
                         ]
                 ]   
