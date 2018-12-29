@@ -33,6 +33,7 @@ type alias Model =
     , coordinates : List Coordinate
     , tiles : List Coordinate
     , labelColors : Dict String Color
+    , labelCoordinates : Dict String (Float, Float)
     }
 
 initialModel : Model
@@ -41,6 +42,7 @@ initialModel =
     , coordinates = []
     , tiles = []
     , labelColors = getLabelColors
+    , labelCoordinates = Dict.empty
     }
 
 type Msg
@@ -162,10 +164,10 @@ getShortestDistanceFromAllOtherCoordinates coordinate coordinates =
             targetCoordinate = Tuple.second acc
         in
             -- TODO: need to figure out how to do dots, this doesn't appear to be working
-            if distance == currentShortestDistance then
-                -- we've got a dodson here
-                (-1, coord)
-            else if distance < currentShortestDistance then
+            -- if distance == currentShortestDistance then
+            --     -- we've got a dodson here
+            --     (-1, coord)
+            if distance < currentShortestDistance then
                 (distance, coord)
             else
                 acc) (20000, coordinate) coordinates
@@ -323,8 +325,10 @@ update msg model =
                 -- coord2 = Coordinate (Point 124 562) (PointFloat (toFloat 124) (toFloat 562)) "b"
                 -- dist1 = getDistanceBetweenCoordinates coord1 coord2
                 -- log1 = log "dist1" dist1 // 19, now 197, w00t w00000t
+
+                labelCoordinates = getLabelCoordinates 580 0 coordinates
             in
-            { model | coordinates = coordinates }
+            { model | coordinates = coordinates, labelCoordinates = labelCoordinates}
             -- model
 
         -- when you type or copy pasta into the text area
@@ -384,11 +388,12 @@ drawCoordinate : Coordinate -> Commands -> Commands
 drawCoordinate coordinate cmds =
     cmds
     |> Canvas.fillStyle (Color.rgb 0 0 0)
-    -- |> Canvas.fillCircle coordinate.pointFloat.x coordinate.pointFloat.y 4
-    |> Canvas.fillRect coordinate.pointFloat.x (coordinate.pointFloat.y - 12) 20 14
-    |> Canvas.fillStyle canvasCoordinateDotColor
-    |> Canvas.font "14px Helvetica"
-    |> Canvas.fillText coordinate.label coordinate.pointFloat.x coordinate.pointFloat.y Nothing
+    |> Canvas.fillCircle coordinate.pointFloat.x coordinate.pointFloat.y 4
+
+    -- |> Canvas.fillRect (coordinate.pointFloat.x - 10) (coordinate.pointFloat.y - 7) 20 14
+    -- |> Canvas.fillStyle canvasCoordinateDotColor
+    -- |> Canvas.font "14px Helvetica"
+    -- |> Canvas.fillText coordinate.label (coordinate.pointFloat.x - 8) (coordinate.pointFloat.y + 5) Nothing
 
 plotColors =
     Array.fromList [ Color.rgb 239 83 80
@@ -463,7 +468,16 @@ getLabelColors =
             |> Dict.fromList
     in
     labelColorDict
-    
+
+getLabelCoordinates : Float -> Float -> List Coordinate -> Dict String (Float, Float)
+getLabelCoordinates startX startY coordinates =
+    List.indexedMap (\index coord -> (startY + (12 * (toFloat index)), coord)) coordinates
+    |> List.foldl (\tuple acc ->
+        let
+            y = Tuple.first tuple
+            coord = Tuple.second tuple
+        in
+            Dict.insert coord.label (startX, y) acc) Dict.empty
 
 drawPlot : Coordinate -> Color -> Commands -> Commands
 drawPlot coordinate color cmds =
@@ -521,7 +535,24 @@ drawLegendFromCoordinates labelColors startX startY coordinates cmds =
             coord = Tuple.second tuple
         in
         acc |> drawLegend labelColors startX y coord) cmds
-        
+
+drawCoordinateToLabel : Dict String (Float, Float) -> List Coordinate -> Commands -> Commands
+drawCoordinateToLabel labelCoordinates coordinates cmds =
+    List.foldl (\coordinate acc ->
+        let
+            tuple = Dict.get coordinate.label labelCoordinates |> Maybe.withDefault (0, 0)
+            targetX = Tuple.first tuple
+            targetY = Tuple.second tuple
+        in
+        acc
+        |> Canvas.lineWidth 0.5
+        |> Canvas.strokeStyle Color.black
+        |> Canvas.beginPath
+        |> Canvas.moveTo coordinate.pointFloat.x coordinate.pointFloat.y
+        |> Canvas.lineTo targetX targetY
+        |> Canvas.stroke
+        ) cmds coordinates
+    
 
 view : Model -> Html Msg
 view model =
@@ -550,7 +581,8 @@ view model =
                         Canvas.element
                             getCols
                             getRows
-                            [ style "border" "1px solid black"
+                            [
+                                -- style "border" "1px solid black"
                                 -- , style "width" "600px"
                                 ]
                             ( Canvas.empty
@@ -559,7 +591,7 @@ view model =
                                 |> (\cmds -> drawTiles model.tiles model.labelColors cmds)
                                 |> (\cmds -> List.foldl drawCoordinate cmds model.coordinates)
                                 |> (drawLegendFromCoordinates model.labelColors 580 0 model.coordinates)
-                                -- |> (\cmds -> List.foldl (drawLegend model.labelColors) cmds model.coordinates)
+                                |> drawCoordinateToLabel model.labelCoordinates model.coordinates
                             )
                         ]
                 ]   
