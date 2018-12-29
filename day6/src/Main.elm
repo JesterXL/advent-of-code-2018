@@ -106,32 +106,21 @@ parseCoordinates string =
 getManhattanDistance : Point -> Point -> Int
 getManhattanDistance point1 point2 =
     let
-        -- I have a feeling I may regret this later, but it's a pain passing it down
-        size = 1
+        size = 1 -- I have a feeling I may regret this later, but it's a pain passing it down
         x1 = abs point1.x - point2.x
         x2 = abs point2.x - point1.x
         dx = min x1 (size - x2)
         y1 = abs point1.y - point2.y
         y2 = abs point2.y - point1.y
         dy = min y1 (size - y2)
+        distance = abs (dx + dy)
     in
-        dx + dy
-
-getDistanceBetweenCoordinates : Coordinate -> Coordinate -> Int
-getDistanceBetweenCoordinates coordinate1 coordinate2 =
-    getManhattanDistance coordinate1.point coordinate2.point
+        distance
 
 getCoordinateLabels : Array String
 getCoordinateLabels =
     Array.fromList ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z"
                     , "AA", "BB", "CC", "DD", "EE", "FF", "GG", "HH", "II", "JJ", "KK", "LL", "MM", "NN", "OO", "PP", "QQ", "RR", "SS", "TT", "UU", "VV", "WW", "XX", "YY", "ZZ" ]
-
--- updateGridFromCoordinate : Coordinate -> Dict String Coordinate -> Dict String Coordinate
--- updateGridFromCoordinate coordinate grid =
---     getXListFromClaim claim
---     |> List.foldl (\x acc->
---             getYListFromClaim claim
---             |> updateGridFromYList x acc) grid
 
 getEmptyRow : Int -> Int -> Array Coordinate
 getEmptyRow columnCount row =
@@ -141,10 +130,32 @@ getMDArray : Int -> Int -> Array (Array Coordinate)
 getMDArray rowCount columnCount =
     Array.initialize rowCount (\index -> getEmptyRow columnCount index)
 
-calculateCoordinateDistanceForRow : Array Coordinate -> Coordinate -> Array Int
-calculateCoordinateDistanceForRow row targetCoordinate =
-    Array.map (\coordinate -> getDistanceBetweenCoordinates coordinate targetCoordinate) row
+getDistanceBetweenCoordinates : Coordinate -> Coordinate -> Int
+getDistanceBetweenCoordinates coordinate1 coordinate2 =
+    getManhattanDistance coordinate1.point coordinate2.point
 
+getShortestDistanceFromAllOtherCoordinates : Coordinate -> Array Coordinate -> (Int, Coordinate)
+getShortestDistanceFromAllOtherCoordinates coordinate coordinates =
+    Array.foldl (\coord acc->
+        let
+            distance = getDistanceBetweenCoordinates coordinate coord
+            currentShortestDistance = Tuple.first acc
+            -- d1 = log "diff" ("distance: " ++ String.fromInt distance ++ ", currentShortestDistance: " ++ String.fromInt currentShortestDistance)
+            targetCoordinate = Tuple.second acc
+        in
+            if distance == currentShortestDistance then
+                -- we've got a dodson here
+                (-1, { coordinate | label = "." })
+            else if distance < currentShortestDistance then
+                (distance, coord)
+            else
+                acc) (20000, coordinate) coordinates
+
+calculateCoordinateDistanceForRow : Array Coordinate -> Array Coordinate -> Array String
+calculateCoordinateDistanceForRow row targetCoordinates =
+    Array.map (\targetCoordinate -> getShortestDistanceFromAllOtherCoordinates targetCoordinate targetCoordinates) row
+    |> Array.map Tuple.second
+    |> Array.map .label
 
 update : Msg -> Model -> Model
 update msg model =
@@ -158,12 +169,26 @@ update msg model =
                     getMDArray rows cols
                     -- |>    
                 -- mdarraylog = log "mdarray" mdarray
-                coordinates =
-                    Array.initialize 10 (\index -> Coordinate (Point index 0) (PointFloat (toFloat index)(toFloat 0)) "-")
-                -- coordinateslog = log "coordinates" coordinates
-                coordinate2 = Coordinate (Point 4 4) (PointFloat (toFloat 4)(toFloat 4)) "-"
-                distance = calculateCoordinateDistanceForRow coordinates coordinate2
-                distancelog = log "distance" distance
+
+                -- coordinates =
+                --     Array.initialize 10 (\index -> Coordinate (Point index 0) (PointFloat (toFloat index)(toFloat 0)) "-")
+                -- -- coordinateslog = log "coordinates" coordinates
+                -- coordinate2 = Coordinate (Point 4 4) (PointFloat (toFloat 4)(toFloat 4)) "-"
+                -- distance = calculateCoordinateDistanceForRow coordinates coordinate2
+                -- distancelog = log "distance" distance
+
+                -- row =
+                --     Array.initialize 10 (\index -> Coordinate (Point index 0) (PointFloat (toFloat index)(toFloat 0)) "-")
+                
+                -- wat = calculateCoordinateDistanceForRow row (Array.fromList model.coordinates)
+                -- watlog = log "wat" wat
+
+                coordinatesArray =
+                    Array.fromList model.coordinates
+                um =
+                    Array.map (\row -> calculateCoordinateDistanceForRow row coordinatesArray) mdarray
+                umlog = log "um" um
+
             in
             model
             
@@ -235,6 +260,7 @@ drawCoordinate coordinate cmds =
     cmds
     |> Canvas.fillStyle canvasCoordinateDotColor
     -- |> Canvas.fillCircle coordinate.pointFloat.x coordinate.pointFloat.y 4
+        |> Canvas.font "14px Helvetica"
         |> Canvas.fillText coordinate.label coordinate.pointFloat.x coordinate.pointFloat.y Nothing
 
 view : Model -> Html Msg
