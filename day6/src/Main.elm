@@ -34,6 +34,7 @@ type alias Model =
     , tiles : List Coordinate
     , labelColors : Dict String Color
     , labelCoordinates : Dict String (Float, Float)
+    , totals : Dict String Int
     }
 
 initialModel : Model
@@ -43,6 +44,7 @@ initialModel =
     , tiles = []
     , labelColors = getLabelColors
     , labelCoordinates = Dict.empty
+    , totals = Dict.empty
     }
 
 type Msg
@@ -301,7 +303,8 @@ update msg model =
                         updateCountedCoordinateDictionary closestTarget.label totalSet) counted
                     |> Dict.toList
                     |> List.sortBy Tuple.second
-                -- totallog = log "total" total
+                    |> Dict.fromList
+                totallog = log "total" total
 
                 tiles =
                     coordinateAndDistanceTargets
@@ -313,7 +316,7 @@ update msg model =
                          List.append [{coordinate | label = target.label}] acc) []
                 -- tileslog = log "tiles" tiles
             in
-            { model | tiles = tiles }
+            { model | tiles = tiles, totals = total }
             
         ParseCoordinatesText ->
             let
@@ -326,7 +329,7 @@ update msg model =
                 -- dist1 = getDistanceBetweenCoordinates coord1 coord2
                 -- log1 = log "dist1" dist1 // 19, now 197, w00t w00000t
 
-                labelCoordinates = getLabelCoordinates 580 0 coordinates
+                labelCoordinates = getLabelCoordinates getStartX 0 coordinates
             in
             { model | coordinates = coordinates, labelCoordinates = labelCoordinates}
             -- model
@@ -370,6 +373,10 @@ getRows =
 getCols : Int
 getCols =
     600
+
+getStartX : Float
+getStartX =
+    550
 
 getRowsFloat : Float
 getRowsFloat =
@@ -512,8 +519,8 @@ drawTiles tiles labelColors cmds =
 --     |> Canvas.font "14px Helvetica"
 --     |> Canvas.fillText coordinate.label coordinate.pointFloat.x coordinate.pointFloat.y Nothing
 
-drawLegend : Dict String Color -> Int -> Int -> Coordinate -> Commands -> Commands
-drawLegend labelColors x y coordinate cmds =
+drawLegend : Dict String Color -> Int -> Int -> Coordinate -> String -> Commands -> Commands
+drawLegend labelColors x y coordinate total cmds =
     let
         color = (getColorElseWhite coordinate.label labelColors)
         xFloat = toFloat x
@@ -521,20 +528,24 @@ drawLegend labelColors x y coordinate cmds =
     in
     cmds
     |> Canvas.fillStyle color
-    |> Canvas.fillRect xFloat yFloat 20 11
+    |> Canvas.fillRect xFloat yFloat 60 11
+    |> Canvas.fillStyle (Color.rgb 0 0 0)
+    |> Canvas.font "10px Helvetica"
+    |> Canvas.fillText (coordinate.label ++ " - " ++ total) (xFloat + 1) (yFloat + 11) Nothing
     |> Canvas.fillStyle (Color.rgb 255 255 255)
     |> Canvas.font "10px Helvetica"
-    |> Canvas.fillText coordinate.label xFloat (yFloat + 10) Nothing
+    |> Canvas.fillText (coordinate.label ++ " - " ++ total) xFloat (yFloat + 10) Nothing
 
 -- (\cmds -> List.foldl (drawLegend model.labelColors) cmds model.coordinates)
-drawLegendFromCoordinates labelColors startX startY coordinates cmds =
+drawLegendFromCoordinates labelColors startX startY coordinates totals cmds =
     List.indexedMap (\index coord -> (startY + (12 * index), coord)) coordinates
     |> List.foldl (\tuple acc ->
         let
             y = Tuple.first tuple
             coord = Tuple.second tuple
+            total = Dict.get coord.label totals |> Maybe.withDefault 0 |> String.fromInt
         in
-        acc |> drawLegend labelColors startX y coord) cmds
+        acc |> drawLegend labelColors startX y coord total) cmds
 
 drawCoordinateToLabel : Dict String (Float, Float) -> List Coordinate -> Commands -> Commands
 drawCoordinateToLabel labelCoordinates coordinates cmds =
@@ -549,7 +560,7 @@ drawCoordinateToLabel labelCoordinates coordinates cmds =
         |> Canvas.strokeStyle Color.black
         |> Canvas.beginPath
         |> Canvas.moveTo coordinate.pointFloat.x coordinate.pointFloat.y
-        |> Canvas.lineTo targetX targetY
+        |> Canvas.lineTo targetX (targetY + 5)
         |> Canvas.stroke
         ) cmds coordinates
     
@@ -590,7 +601,7 @@ view model =
                                 |> renderBackground getColsFloat getRowsFloat
                                 |> (\cmds -> drawTiles model.tiles model.labelColors cmds)
                                 |> (\cmds -> List.foldl drawCoordinate cmds model.coordinates)
-                                |> (drawLegendFromCoordinates model.labelColors 580 0 model.coordinates)
+                                |> (drawLegendFromCoordinates model.labelColors (round getStartX) 0 model.coordinates model.totals)
                                 |> drawCoordinateToLabel model.labelCoordinates model.coordinates
                             )
                         ]
