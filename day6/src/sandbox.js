@@ -28,15 +28,20 @@ const dist = point1 => point2 => {
     const y1 = Math.abs(point1.y- point2.y)
     const y2 = Math.abs(point2.y - point1.y)
     const dy = Math.min(y1, (size - y2))
-    log("x1:", x1)
-    log("x2:", x2)
-    log("dx:", dx)
-    log("y1:", y1)
-    log("y2:", y2)
-    log("dy:", dy)
+    // log("x1:", x1)
+    // log("x2:", x2)
+    // log("dx:", dx)
+    // log("y1:", y1)
+    // log("y2:", y2)
+    // log("dy:", dy)
     const distance = Math.abs(dx + dy)
+    const distance2 = Math.abs(point2.x-point1.x) + Math.abs(point2.y-point1.y);
+    log("distance:", distance, ", distance2:", distance2)
     return distance
 }
-// log(dist({x: 0, y: 0})({x: 4, y: 4}))
-log(dist({x: 233, y: 472})({x: 124, y: 562}))
+dist({x: 0, y: 0})({x: 0, y: 0})
+dist({x: 0, y: 0})({x: 1, y: 0})
+dist({x: 0, y: 0})({x: 0, y: 1})
+dist({x: 0, y: 0})({x: 1, y: 1})
+dist({x: 233, y: 472})({x: 124, y: 562})
 // 684

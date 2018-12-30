@@ -72,8 +72,8 @@ intListToPoint : List Int -> Point
 intListToPoint intList =
     let
         xAndYList = Array.fromList intList
-        x = Array.get 0 xAndYList |> Maybe.withDefault 0
-        y = Array.get 1 xAndYList |> Maybe.withDefault 0
+        x = Array.get 0 xAndYList |> Maybe.withDefault -3
+        y = Array.get 1 xAndYList |> Maybe.withDefault -3
     in
     Point x y
 
@@ -95,43 +95,15 @@ parseCoordinates string =
     |> List.map (String.split ",")
     |> List.map (List.map String.trim)
     |> List.map (List.map String.toInt)
-    |> List.map (List.map (Maybe.withDefault 0))
+    |> List.map (List.map (Maybe.withDefault -4))
     |> List.map (List.map add100)
     |> List.map intListToPoint
     |> List.indexedMap pointToCoordinate
 
-{-
-    [A, 0, 0, 0, 0, 0, 0]
-  , [0, 0, 0, 0, 0, 0, 0]  
-  , [0, 0, 0, 0, 0, 0, 0] 
-  , [0, 0, 0, 0, 0, 0, 0] 
-  , [0, 0, 0, 0, B, 0, 0] 
-  , [0, 0, 0, 0, 0, 0, 0] 
-  , [0, 0, 0, 0, 0, 0, 0] 
-  , [0, 0, 0, 0, 0, 0, 0] 
--}
-
 getManhattanDistance : Point -> Point -> Int
 getManhattanDistance point1 point2 =
     let
-        size = 1 -- I have a feeling I may regret this later, but it's a pain passing it down
-        x1 = abs (point1.x - point2.x)
-        x2 = abs (point2.x - point1.x)
-        dx = min x1 (size - x2)
-        y1 = abs (point1.y - point2.y)
-        y2 = abs (point2.y - point1.y)
-        dy = min y1 (size - y2)
-        distance = abs (dx + dy)
-
-        -- point1log = log "point1" point1
-        -- point2log = log "point2" point2
-        -- x1log = log "x1" x1
-        -- x2log = log "x2" x2
-        -- dxlog = log "dx" dx
-        -- y1log = log "y1" y1
-        -- y2log = log "y2" y2
-        -- dylog = log "dy" dy
-        -- distancelog = log "distance" distance
+        distance = (abs (point2.x - point1.x)) + (abs (point2.y - point1.y))
     in
         distance
 
@@ -152,9 +124,10 @@ getDistanceBetweenCoordinates : Coordinate -> Coordinate -> Int
 getDistanceBetweenCoordinates coordinate1 coordinate2 =
     getManhattanDistance coordinate1.point coordinate2.point
 
--- TODO: I think modifying this function to return coord instead of coordinate gives you the
--- distance too the target coordinate, but it removes "who" the original coordinate is. You need both.
--- we should probably return a Dictionary instead of a Tuple.
+coordinatesEqual : Coordinate -> Coordinate -> Bool
+coordinatesEqual coordinate1 coordinate2 =
+    coordinate1.point.x == coordinate2.point.x && coordinate1.point.y == coordinate2.point.y
+
 getShortestDistanceFromAllOtherCoordinates : Coordinate -> Array Coordinate -> (Int, Coordinate)
 getShortestDistanceFromAllOtherCoordinates coordinate coordinates =
     Array.foldl (\coord acc->
@@ -166,10 +139,13 @@ getShortestDistanceFromAllOtherCoordinates coordinate coordinates =
             targetCoordinate = Tuple.second acc
         in
             -- TODO: need to figure out how to do dots, this doesn't appear to be working
-            -- if distance == currentShortestDistance then
-            --     -- we've got a dodson here
-            --     (-1, coord)
-            if distance < currentShortestDistance then
+            -- if distance == currentShortestDistance && coordinatesEqual coordinate coord == False then
+            if Tuple.first acc == -1 then
+                acc
+            else if distance == currentShortestDistance then
+                -- we've got a Dodson here
+                (-1, coord)
+            else if distance < currentShortestDistance then
                 (distance, coord)
             else
                 acc) (20000, coordinate) coordinates
@@ -178,7 +154,7 @@ getShortestDistanceFromAllOtherCoordinates coordinate coordinates =
 -- coordinate: Coordinate in the row. 0, 0 == coordinate in that particular mdarray.
 -- distance: how far is the coordinate from the targetCoordinate. -1 means 0 distance. -2 means it's on the edge and infinite.
 -- targetCoordinate: Target Coordinate is the big ole list of coordinates we've parsed from our puzzle input.
--- calculateCoordinateDistanceForRow : Array Coordinate -> Array Coordinate -> Array String
+calculateCoordinateDistanceForRow : Array Coordinate -> Array Coordinate -> Array (Coordinate, (Int, Coordinate))
 calculateCoordinateDistanceForRow row targetCoordinates =
     Array.map (\targetCoordinate -> (targetCoordinate, getShortestDistanceFromAllOtherCoordinates targetCoordinate targetCoordinates)) row
     -- |> Array.slice 0 600
@@ -187,10 +163,10 @@ calculateCoordinateDistanceForRow row targetCoordinates =
             coordinate = Tuple.first tuples
             distanceAndTarget = Tuple.second tuples
             target = Tuple.second distanceAndTarget
-            datEdge = coordinateTouchesEdge 600 600 coordinate
+            datEdge = coordinateTouchesEdge getRows getCols coordinate
             -- log1 = log "datEdge" datEdge
         in
-        if datEdge == True then -- moarrrr hardcoding regrets
+        if datEdge == True then
             (coordinate, (-2, target))
         else
             tuples)
@@ -237,26 +213,20 @@ update msg model =
     case msg of
         CalculateCoordinateDistance ->
             let
+                -- ** Challenge 1 **
+                -- Attempt #1: 545 is too low... uh...
+                -- Attempt #2: 546 is too low. I'm in trouble, I thought I was good by this point.
+                -- No wait, I'm an idiot, sort is Ascending, DOH
+                -- Attempt #3: 4015 is too high. WHAT come on man, I worked hard on this.
+                -- Attempt #4: 3822: added back the -1 for same distance, but... not sure this'll work, worth a shot, nope, not right, ugh.
+                -- Attempt #5: 3981, heh, failed, grasping at straws at this point. I think my -1 is still good.
+                -- Attempt #6: 3819, failed. I corrected my Manhattan Distance function for the 3rd time, heh and I REALLY think it's good this time. However, wrong answer, meh...
+                -- Attempt #7: using David's inputs, I get 4186 in his Python. Elm prints out 4122. Yep. *sigh* 
                 cols = getCols
                 rows = getRows
             
                 mdarray =
                     getMDArray cols rows
-                    -- |>    
-                -- mdarraylog = log "mdarray" mdarray
-
-                -- coordinates =
-                --     Array.initialize 10 (\index -> Coordinate (Point index 0) (PointFloat (toFloat index)(toFloat 0)) "-")
-                -- -- coordinateslog = log "coordinates" coordinates
-                -- coordinate2 = Coordinate (Point 4 4) (PointFloat (toFloat 4)(toFloat 4)) "-"
-                -- distance = calculateCoordinateDistanceForRow coordinates coordinate2
-                -- distancelog = log "distance" distance
-
-                -- row =
-                --     Array.initialize 10 (\index -> Coordinate (Point index 0) (PointFloat (toFloat index)(toFloat 0)) "-")
-                
-                -- wat = calculateCoordinateDistanceForRow row (Array.fromList model.coordinates)
-                -- watlog = log "wat" wat
 
                 coordinatesArray =
                     Array.fromList model.coordinates
@@ -265,28 +235,26 @@ update msg model =
                     Array.map (\row -> calculateCoordinateDistanceForRow row coordinatesArray) mdarray
                     |> Array.foldl (\row acc ->
                         Array.foldl (\tuple deepAcc -> Array.push tuple deepAcc) acc row) Array.empty
-                        
-                -- NOTE: I give up on infinite for now, lol, this is hard... it keeps getting
-                -- every single tile as somehow having at least 1 on the edge. This means
-                -- that technically every area is infinite which can't be correct, 
-                -- else my puzzle input is bugged like they said Day 6 had a bug.
-                -- I'm betting on my crappy math skills being the problem.
-
-                -- infiniteLabels =
-                --     getInfiniteSet coordinateAndDistanceTargets
-                -- infiniteLabelslog = log "infiniteLabels" infiniteLabels
-                -- finiteDistanceTargets =
-                --     Array.filter (\item ->
-                --         let
-                --             coordinate = Tuple.first item
-                --             target = Tuple.second (Tuple.second item)
-                --             -- log1 = log "datmember" (Set.member target.label infiniteLabels)
-                --         in
-                --             if Set.member target.label infiniteLabels then
-                --                 False
-                --             else
-                --                 True) coordinateAndDistanceTargets
-                --     |> Array.length
+                
+                -- I wonder, does dots that are closest to 2 or more points
+                -- count towards making it infinite?
+                infiniteLabels =
+                    getInfiniteSet coordinateAndDistanceTargets
+                    -- Set.empty
+                
+                finiteDistanceTargets =
+                    Array.filter (\item ->
+                        let
+                            coordinate = Tuple.first item
+                            distance = Tuple.first (Tuple.second item)
+                            target = Tuple.second (Tuple.second item)
+                            -- log1 = log "datmember" (Set.member target.label infiniteLabels)
+                        in
+                            if Set.member target.label infiniteLabels || distance == -1 then
+                                False
+                            else
+                                True) coordinateAndDistanceTargets
+                    
 
                 -- umlog = log "coordinateAndDistanceTargets" coordinateAndDistanceTargets
                 -- finiteDistanceTargetslog = log "finiteDistanceTargets" finiteDistanceTargets
@@ -294,8 +262,9 @@ update msg model =
                 counted = 
                     Dict.empty
                 
-                total =
-                    coordinateAndDistanceTargets
+                totals =
+                    -- coordinateAndDistanceTargets
+                    finiteDistanceTargets
                     |> Array.foldl (\tuples totalSet ->
                         let
                             closestTarget = Tuple.second (Tuple.second tuples)
@@ -303,11 +272,18 @@ update msg model =
                         updateCountedCoordinateDictionary closestTarget.label totalSet) counted
                     |> Dict.toList
                     |> List.sortBy Tuple.second
-                    |> Dict.fromList
-                totallog = log "total" total
+                    |> List.reverse
+                    -- |> Dict.fromList
+                totallog = log "totals" totals
+
+                biggest =
+                    List.head totals
+                    |> Maybe.withDefault ("??", 0)
+                biggestlog = log "biggest" biggest
 
                 tiles =
-                    coordinateAndDistanceTargets
+                    -- coordinateAndDistanceTargets
+                    finiteDistanceTargets
                     |> Array.foldl (\tuples acc ->
                         let
                             coordinate = Tuple.first tuples
@@ -316,7 +292,7 @@ update msg model =
                          List.append [{coordinate | label = target.label}] acc) []
                 -- tileslog = log "tiles" tiles
             in
-            { model | tiles = tiles, totals = total }
+            { model | tiles = tiles, totals = (Dict.fromList totals) }
             
         ParseCoordinatesText ->
             let
@@ -328,6 +304,12 @@ update msg model =
                 -- coord2 = Coordinate (Point 124 562) (PointFloat (toFloat 124) (toFloat 562)) "b"
                 -- dist1 = getDistanceBetweenCoordinates coord1 coord2
                 -- log1 = log "dist1" dist1 // 19, now 197, w00t w00000t
+
+                -- log1 = log "log1" (getManhattanDistance (Point 0 0) (Point 0 0)) 
+                -- log2 = log "log2" (getManhattanDistance (Point 0 0) (Point 1 0)) 
+                -- log3 = log "log3" (getManhattanDistance (Point 0 0) (Point 0 1)) 
+                -- log4 = log "log4" (getManhattanDistance (Point 0 0) (Point 1 1)) 
+                -- log5 = log "log5" (getManhattanDistance (Point 233 472) (Point 124 562)) 
 
                 labelCoordinates = getLabelCoordinates getStartX 0 coordinates
             in
@@ -345,26 +327,6 @@ update msg model =
 
 canvasBackgroundColor =
     Color.rgb 26 35 126
-
--- canvasCoordinateDotColor =
---     Color.rgb 136 14 79
-
-canvasCoordinateDotColor =
-    Color.rgb 233 30 99
-
-canvasNoOverlapColor =
-    Color.rgb 252 228 236
-
--- renderEmptyRectangle x y width height cmds =
---     cmds
---         |> Canvas.lineWidth 3
---         |> Canvas.strokeStyle canvasClaimColor
---         |> Canvas.strokeRect (toFloat x) (toFloat y) (toFloat width) (toFloat height)
-
--- renderFilledRectangle x y width height color cmds =
---     cmds
---         |> Canvas.fillStyle color
---         |> Canvas.fillRect (toFloat x) (toFloat y) (toFloat width) (toFloat height)
 
 getRows : Int
 getRows =
@@ -396,7 +358,6 @@ drawCoordinate coordinate cmds =
     cmds
     |> Canvas.fillStyle (Color.rgb 0 0 0)
     |> Canvas.fillCircle coordinate.pointFloat.x coordinate.pointFloat.y 4
-
     -- |> Canvas.fillRect (coordinate.pointFloat.x - 10) (coordinate.pointFloat.y - 7) 20 14
     -- |> Canvas.fillStyle canvasCoordinateDotColor
     -- |> Canvas.font "14px Helvetica"
@@ -502,22 +463,10 @@ drawTile : Coordinate -> Dict String Color -> Commands -> Commands
 drawTile tile labelColorDict cmds =
     cmds
     |> drawPlot tile (getColorElseWhite tile.label labelColorDict)
-    -- |> drawPlot tile (Color.rgb 255 255 255)
 
 drawTiles : List Coordinate -> Dict String Color -> Commands -> Commands
 drawTiles tiles labelColors cmds =
         List.foldl (\tile acc -> drawTile tile labelColors acc) cmds tiles
-
- 
---  drawCoordinate : Coordinate -> Commands -> Commands
--- drawCoordinate coordinate cmds =
---     cmds
---     |> Canvas.fillStyle (Color.rgb 0 0 0)
---     -- |> Canvas.fillCircle coordinate.pointFloat.x coordinate.pointFloat.y 4
---     |> Canvas.fillRect coordinate.pointFloat.x (coordinate.pointFloat.y - 12) 20 14
---     |> Canvas.fillStyle canvasCoordinateDotColor
---     |> Canvas.font "14px Helvetica"
---     |> Canvas.fillText coordinate.label coordinate.pointFloat.x coordinate.pointFloat.y Nothing
 
 drawLegend : Dict String Color -> Int -> Int -> Coordinate -> String -> Commands -> Commands
 drawLegend labelColors x y coordinate total cmds =
@@ -557,7 +506,7 @@ drawCoordinateToLabel labelCoordinates coordinates cmds =
         in
         acc
         |> Canvas.lineWidth 0.5
-        |> Canvas.strokeStyle Color.black
+        |> Canvas.strokeStyle Color.white
         |> Canvas.beginPath
         |> Canvas.moveTo coordinate.pointFloat.x coordinate.pointFloat.y
         |> Canvas.lineTo targetX (targetY + 5)
@@ -638,53 +587,106 @@ main =
 
 unitsCache : String
 unitsCache =
-    """181, 184
-230, 153
-215, 179
-84, 274
-294, 274
-127, 259
-207, 296
-76, 54
-187, 53
-318, 307
-213, 101
-111, 71
-310, 295
-40, 140
-176, 265
-98, 261
-315, 234
-106, 57
-40, 188
-132, 292
-132, 312
-97, 334
-292, 293
-124, 65
-224, 322
-257, 162
-266, 261
-116, 122
-80, 319
-271, 326
-278, 231
-191, 115
-277, 184
-329, 351
-58, 155
-193, 147
-45, 68
-310, 237
-171, 132
-234, 152
-158, 189
-212, 100
-346, 225
-257, 159
-330, 112
-204, 320
-199, 348
-207, 189
-130, 289
-264, 223"""
+    """154, 159
+172, 84
+235, 204
+181, 122
+161, 337
+305, 104
+128, 298
+176, 328
+146, 71
+210, 87
+341, 195
+50, 96
+225, 151
+86, 171
+239, 68
+79, 50
+191, 284
+200, 122
+282, 240
+224, 282
+327, 74
+158, 289
+331, 244
+154, 327
+317, 110
+272, 179
+173, 175
+187, 104
+44, 194
+202, 332
+249, 197
+244, 225
+52, 127
+299, 198
+123, 198
+349, 75
+233, 72
+284, 130
+119, 150
+172, 355
+147, 314
+58, 335
+341, 348
+236, 115
+185, 270
+173, 145
+46, 288
+214, 127
+158, 293
+237, 311"""
+
+-- unitsCache : String
+-- unitsCache =
+--     """181, 184
+-- 230, 153
+-- 215, 179
+-- 84, 274
+-- 294, 274
+-- 127, 259
+-- 207, 296
+-- 76, 54
+-- 187, 53
+-- 318, 307
+-- 213, 101
+-- 111, 71
+-- 310, 295
+-- 40, 140
+-- 176, 265
+-- 98, 261
+-- 315, 234
+-- 106, 57
+-- 40, 188
+-- 132, 292
+-- 132, 312
+-- 97, 334
+-- 292, 293
+-- 124, 65
+-- 224, 322
+-- 257, 162
+-- 266, 261
+-- 116, 122
+-- 80, 319
+-- 271, 326
+-- 278, 231
+-- 191, 115
+-- 277, 184
+-- 329, 351
+-- 58, 155
+-- 193, 147
+-- 45, 68
+-- 310, 237
+-- 171, 132
+-- 234, 152
+-- 158, 189
+-- 212, 100
+-- 346, 225
+-- 257, 159
+-- 330, 112
+-- 204, 320
+-- 199, 348
+-- 207, 189
+-- 130, 289
+-- 264, 223"""
