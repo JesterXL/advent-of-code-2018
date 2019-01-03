@@ -7,7 +7,6 @@
     YouTube: youtube.com/jessewarden
 
     https://adventofcode.com/2018/day/4
-
 -}
 
 module Main exposing (main)
@@ -68,6 +67,10 @@ type alias Coordinate =
     , pointFloat : PointFloat
     , label : String }
 
+getBlankCoordinate : Coordinate
+getBlankCoordinate =
+    Coordinate (Point 0 0) (PointFloat (toFloat 0) (toFloat 0)) "blank"
+
 intListToPoint : List Int -> Point
 intListToPoint intList =
     let
@@ -89,6 +92,10 @@ add100 : Int -> Int
 add100 value =
     value + 100
 
+add2 : Int -> Int
+add2 value =
+    value + 2
+
 -- parseCoordinates : String -> List Coordinate
 parseCoordinates string =
     String.split "\n" string
@@ -96,7 +103,8 @@ parseCoordinates string =
     |> List.map (List.map String.trim)
     |> List.map (List.map String.toInt)
     |> List.map (List.map (Maybe.withDefault -4))
-    |> List.map (List.map add100)
+    -- |> List.map (List.map add100)
+    |> List.map (List.map add2)
     |> List.map intListToPoint
     |> List.indexedMap pointToCoordinate
 
@@ -137,18 +145,62 @@ getShortestDistanceFromAllOtherCoordinates coordinate coordinates =
             currentShortestDistance = Tuple.first acc
             -- d1 = log "diff" ("distance: " ++ String.fromInt distance ++ ", currentShortestDistance: " ++ String.fromInt currentShortestDistance)
             targetCoordinate = Tuple.second acc
+            -- distancelog = log "distance" distance
         in
             -- TODO: need to figure out how to do dots, this doesn't appear to be working
-            -- if distance == currentShortestDistance && coordinatesEqual coordinate coord == False then
-            if Tuple.first acc == -1 then
-                acc
-            else if distance == currentShortestDistance then
-                -- we've got a Dodson here
-                (-1, coord)
-            else if distance < currentShortestDistance then
+            -- -- if distance == currentShortestDistance && coordinatesEqual coordinate coord == False then
+            -- if Tuple.first acc == -1 then
+            --     acc
+            -- if distance == currentShortestDistance then
+            --     -- we've got a Dodson here
+            --     (-1, coord)
+            if distance < currentShortestDistance then
                 (distance, coord)
             else
-                acc) (20000, coordinate) coordinates
+                acc) (200000, coordinate) coordinates
+
+coordinateArrayToSet : Array Coordinate -> Set String
+coordinateArrayToSet array =
+    Array.foldl (\coordinate set -> Set.insert coordinate.label set) Set.empty array
+
+getTopRowSet : Array (Array Coordinate) -> Set String
+getTopRowSet mdarray =
+    let
+        rowLength = (Array.length mdarray) - 1
+
+        firstRow =
+            Array.get 0 mdarray
+            |> Maybe.withDefault Array.empty
+            |> coordinateArrayToSet
+
+        firstRowlog = log "firstRow" firstRow
+
+        lastRow =
+            Array.get rowLength mdarray
+            |> Maybe.withDefault Array.empty
+            |> coordinateArrayToSet
+
+        lastRowlog = log "lastRow" lastRow
+
+        firstColumn =
+            Array.map (\row -> Array.get 0 row |> Maybe.withDefault getBlankCoordinate ) mdarray
+            |> coordinateArrayToSet
+
+        firstColumnlog = log "firstColumn" firstColumn
+
+        lastColumn =
+            Array.map (\row -> Array.get rowLength row |> Maybe.withDefault getBlankCoordinate) mdarray
+            |> coordinateArrayToSet
+        
+        lastColumnlog = log "lastColumn" lastColumn
+
+        mergedSet =
+            Set.foldl Set.insert firstRow lastRow
+            |> Set.foldl Set.insert firstColumn
+            |> Set.foldl Set.insert lastColumn
+
+    in
+    mergedSet
 
 -- NOTE: Return value is a bit complex and I keep forgetting so...
 -- coordinate: Coordinate in the row. 0, 0 == coordinate in that particular mdarray.
@@ -162,14 +214,16 @@ calculateCoordinateDistanceForRow row targetCoordinates =
         let
             coordinate = Tuple.first tuples
             distanceAndTarget = Tuple.second tuples
+            distance = Tuple.first distanceAndTarget
             target = Tuple.second distanceAndTarget
             datEdge = coordinateTouchesEdge getRows getCols coordinate
+            -- log2 = log "coordinate" coordinate.point
             -- log1 = log "datEdge" datEdge
         in
         if datEdge == True then
             (coordinate, (-2, target))
         else
-            tuples)
+            (coordinate, (distance, target)))
 
 updateCountedCoordinateDictionary : String -> Dict String Int -> Dict String Int
 updateCountedCoordinateDictionary label dict =
@@ -196,12 +250,18 @@ coordinateTouchesEdge rowCount columnCount coordinate =
 
 getInfiniteSet : Array (Coordinate, (Int, Coordinate)) -> Set String
 getInfiniteSet array =
+    -- let
+    --     log1 = log "array we got" array
+    -- in
+    
     Array.foldl (\item acc ->
         let
             coordinate = Tuple.first item
             distanceAndTarget = Tuple.second item
             distance = Tuple.first distanceAndTarget
             target = Tuple.second distanceAndTarget
+            -- log1 = log "distance" ((String.fromInt distance) ++ ", target.label: " ++ target.label)
+            -- D and E shouldn't be removed
         in
         if distance == -2 then
             Set.insert target.label acc
@@ -221,7 +281,8 @@ update msg model =
                 -- Attempt #4: 3822: added back the -1 for same distance, but... not sure this'll work, worth a shot, nope, not right, ugh.
                 -- Attempt #5: 3981, heh, failed, grasping at straws at this point. I think my -1 is still good.
                 -- Attempt #6: 3819, failed. I corrected my Manhattan Distance function for the 3rd time, heh and I REALLY think it's good this time. However, wrong answer, meh...
-                -- Attempt #7: using David's inputs, I get 4186 in his Python. Elm prints out 4122. Yep. *sigh* 
+                -- Attempt #7: using David's inputs, I get 4186 in his Python. Elm prints out 4122. Yep. *sigh*
+
                 cols = getCols
                 rows = getRows
             
@@ -230,17 +291,29 @@ update msg model =
 
                 coordinatesArray =
                     Array.fromList model.coordinates
-                
+
+                coordinates = 
+                     Array.map (\row -> calculateCoordinateDistanceForRow row coordinatesArray) mdarray
+
                 coordinateAndDistanceTargets =
-                    Array.map (\row -> calculateCoordinateDistanceForRow row coordinatesArray) mdarray
+                    coordinates
                     |> Array.foldl (\row acc ->
                         Array.foldl (\tuple deepAcc -> Array.push tuple deepAcc) acc row) Array.empty
                 
+                -- coordinateAndDistanceTargetslog = log "coordinateAndDistanceTargets" coordinateAndDistanceTargets
+                
+                -- NOTE: Below is what I'm comparing with Python's edges or "infinite"
+                infiniteLabels2 =
+                    Array.map (\row -> Array.map (\tuple -> Tuple.second(Tuple.second tuple)) row) coordinates
+                    |> getTopRowSet
+                -- infiniteLabels2log = log "infiniteLabels2" infiniteLabels2
+
                 -- I wonder, does dots that are closest to 2 or more points
                 -- count towards making it infinite?
                 infiniteLabels =
                     getInfiniteSet coordinateAndDistanceTargets
                     -- Set.empty
+                -- infiniteLabelslog = log "infiniteLabels" infiniteLabels
                 
                 finiteDistanceTargets =
                     Array.filter (\item ->
@@ -250,10 +323,11 @@ update msg model =
                             target = Tuple.second (Tuple.second item)
                             -- log1 = log "datmember" (Set.member target.label infiniteLabels)
                         in
-                            if Set.member target.label infiniteLabels || distance == -1 then
+                            if Set.member target.label infiniteLabels2 || distance == -1 then
                                 False
                             else
                                 True) coordinateAndDistanceTargets
+                -- finiteDistanceTargetslog = log "finiteDistanceTargets" finiteDistanceTargets
                     
 
                 -- umlog = log "coordinateAndDistanceTargets" coordinateAndDistanceTargets
@@ -268,6 +342,7 @@ update msg model =
                     |> Array.foldl (\tuples totalSet ->
                         let
                             closestTarget = Tuple.second (Tuple.second tuples)
+                            -- log1 = log "closestTarget" closestTarget.label
                         in
                         updateCountedCoordinateDictionary closestTarget.label totalSet) counted
                     |> Dict.toList
@@ -298,7 +373,6 @@ update msg model =
             let
                 coordinates =
                     parseCoordinates model.coordinatesText
-                -- coordinatesLog =log "coordinates" coordinates
 
                 -- coord1 = Coordinate (Point 233 472) (PointFloat (toFloat 233) (toFloat 472)) "a"
                 -- coord2 = Coordinate (Point 124 562) (PointFloat (toFloat 124) (toFloat 562)) "b"
@@ -330,15 +404,18 @@ canvasBackgroundColor =
 
 getRows : Int
 getRows =
+    -- 15
     600
 
 getCols : Int
 getCols =
+    -- 15
     600
 
 getStartX : Float
 getStartX =
-    550
+    -- 20
+    560
 
 getRowsFloat : Float
 getRowsFloat =
@@ -543,7 +620,7 @@ view model =
                             getRows
                             [
                                 -- style "border" "1px solid black"
-                                -- , style "width" "600px"
+                                style "width" "600px"
                                 ]
                             ( Canvas.empty
                                 |> Canvas.clearRect 0 0 getColsFloat getRowsFloat
@@ -585,108 +662,65 @@ main =
         , update = update
         }
 
-unitsCache : String
-unitsCache =
-    """154, 159
-172, 84
-235, 204
-181, 122
-161, 337
-305, 104
-128, 298
-176, 328
-146, 71
-210, 87
-341, 195
-50, 96
-225, 151
-86, 171
-239, 68
-79, 50
-191, 284
-200, 122
-282, 240
-224, 282
-327, 74
-158, 289
-331, 244
-154, 327
-317, 110
-272, 179
-173, 175
-187, 104
-44, 194
-202, 332
-249, 197
-244, 225
-52, 127
-299, 198
-123, 198
-349, 75
-233, 72
-284, 130
-119, 150
-172, 355
-147, 314
-58, 335
-341, 348
-236, 115
-185, 270
-173, 145
-46, 288
-214, 127
-158, 293
-237, 311"""
-
 -- unitsCache : String
 -- unitsCache =
---     """181, 184
--- 230, 153
--- 215, 179
--- 84, 274
--- 294, 274
--- 127, 259
--- 207, 296
--- 76, 54
--- 187, 53
--- 318, 307
--- 213, 101
--- 111, 71
--- 310, 295
--- 40, 140
--- 176, 265
--- 98, 261
--- 315, 234
--- 106, 57
--- 40, 188
--- 132, 292
--- 132, 312
--- 97, 334
--- 292, 293
--- 124, 65
--- 224, 322
--- 257, 162
--- 266, 261
--- 116, 122
--- 80, 319
--- 271, 326
--- 278, 231
--- 191, 115
--- 277, 184
--- 329, 351
--- 58, 155
--- 193, 147
--- 45, 68
--- 310, 237
--- 171, 132
--- 234, 152
--- 158, 189
--- 212, 100
--- 346, 225
--- 257, 159
--- 330, 112
--- 204, 320
--- 199, 348
--- 207, 189
--- 130, 289
--- 264, 223"""
+--     """1, 1
+-- 1, 6
+-- 8, 3
+-- 3, 4
+-- 5, 5
+-- 8, 9"""
+
+
+unitsCache : String
+unitsCache =
+    """181, 184
+230, 153
+215, 179
+84, 274
+294, 274
+127, 259
+207, 296
+76, 54
+187, 53
+318, 307
+213, 101
+111, 71
+310, 295
+40, 140
+176, 265
+98, 261
+315, 234
+106, 57
+40, 188
+132, 292
+132, 312
+97, 334
+292, 293
+124, 65
+224, 322
+257, 162
+266, 261
+116, 122
+80, 319
+271, 326
+278, 231
+191, 115
+277, 184
+329, 351
+58, 155
+193, 147
+45, 68
+310, 237
+171, 132
+234, 152
+158, 189
+212, 100
+346, 225
+257, 159
+330, 112
+204, 320
+199, 348
+207, 189
+130, 289
+264, 223"""
