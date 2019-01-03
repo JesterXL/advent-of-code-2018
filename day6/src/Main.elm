@@ -173,26 +173,26 @@ getTopRowSet mdarray =
             |> Maybe.withDefault Array.empty
             |> coordinateArrayToSet
 
-        firstRowlog = log "firstRow" firstRow
+        -- firstRowlog = log "firstRow" firstRow
 
         lastRow =
             Array.get rowLength mdarray
             |> Maybe.withDefault Array.empty
             |> coordinateArrayToSet
 
-        lastRowlog = log "lastRow" lastRow
+        -- lastRowlog = log "lastRow" lastRow
 
         firstColumn =
             Array.map (\row -> Array.get 0 row |> Maybe.withDefault getBlankCoordinate ) mdarray
             |> coordinateArrayToSet
 
-        firstColumnlog = log "firstColumn" firstColumn
+        -- firstColumnlog = log "firstColumn" firstColumn
 
         lastColumn =
             Array.map (\row -> Array.get rowLength row |> Maybe.withDefault getBlankCoordinate) mdarray
             |> coordinateArrayToSet
         
-        lastColumnlog = log "lastColumn" lastColumn
+        -- lastColumnlog = log "lastColumn" lastColumn
 
         mergedSet =
             Set.foldl Set.insert firstRow lastRow
@@ -282,7 +282,7 @@ update msg model =
                 -- Attempt #5: 3981, heh, failed, grasping at straws at this point. I think my -1 is still good.
                 -- Attempt #6: 3819, failed. I corrected my Manhattan Distance function for the 3rd time, heh and I REALLY think it's good this time. However, wrong answer, meh...
                 -- Attempt #7: using David's inputs, I get 4186 in his Python. Elm prints out 4122. Yep. *sigh*
-
+                -- Attempt #8: 4011; all the clever removal of duplicate coordinates weren't so clever... if I just kept it dumb, it worked.
                 cols = getCols
                 rows = getRows
             
@@ -349,7 +349,7 @@ update msg model =
                     |> List.sortBy Tuple.second
                     |> List.reverse
                     -- |> Dict.fromList
-                totallog = log "totals" totals
+                -- totallog = log "totals" totals
 
                 biggest =
                     List.head totals
@@ -366,6 +366,25 @@ update msg model =
                         in
                          List.append [{coordinate | label = target.label}] acc) []
                 -- tileslog = log "tiles" tiles
+
+                -- ** Challenge #2 **
+                -- Attempt #1: 210, not sure if this will work, but tired, giving a shot: too low
+                -- Attempt #2: 46054, just on a whim to test my count of all items: success! Thank God for David and Python, heh!
+                getXYString = (\coordinate -> (String.fromInt coordinate.point.x) ++ "-" ++ (String.fromInt coordinate.point.y))
+
+                coordinates2 = 
+                    Array.map (\row ->
+                        Array.map (\coordinate ->
+                            ({ x = coordinate.point.x, y = coordinate.point.y }, Array.foldl (\coord acc -> (getDistanceBetweenCoordinates coordinate coord) + acc) 0 (Array.fromList model.coordinates))) row
+                        ) mdarray
+                    |> Array.foldl (\row acc -> Array.append row acc) Array.empty
+                    |> Array.filter (\tuple -> (Tuple.second tuple) < 10000)
+                    -- |> Array.toList
+                    -- |> List.sortBy Tuple.second
+                    |> Array.length
+                coordinates2log = log "coordinates2" coordinates2
+
+
             in
             { model | tiles = tiles, totals = (Dict.fromList totals) }
             
