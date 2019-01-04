@@ -34,6 +34,8 @@ type alias Model =
     , labelColors : Dict String Color
     , labelCoordinates : Dict String (Float, Float)
     , totals : Dict String Int
+    , biggest : (String, Int)
+    , biggestRegion : List PointFloat
     }
 
 initialModel : Model
@@ -44,6 +46,8 @@ initialModel =
     , labelColors = getLabelColors
     , labelCoordinates = Dict.empty
     , totals = Dict.empty
+    , biggest = ("", 0)
+    , biggestRegion = []
     }
 
 type Msg
@@ -67,10 +71,6 @@ type alias Coordinate =
     , pointFloat : PointFloat
     , label : String }
 
-getBlankCoordinate : Coordinate
-getBlankCoordinate =
-    Coordinate (Point 0 0) (PointFloat (toFloat 0) (toFloat 0)) "blank"
-
 intListToPoint : List Int -> Point
 intListToPoint intList =
     let
@@ -88,15 +88,15 @@ pointToCoordinate index point =
         Coordinate point (PointFloat (toFloat point.x) (toFloat point.y)) label
     
 
-add100 : Int -> Int
-add100 value =
-    value + 100
+-- add100 : Int -> Int
+-- add100 value =
+--     value + 100
 
-add2 : Int -> Int
-add2 value =
-    value + 2
+-- add2 : Int -> Int
+-- add2 value =
+--     value + 2
 
--- parseCoordinates : String -> List Coordinate
+parseCoordinates : String -> List Coordinate
 parseCoordinates string =
     String.split "\n" string
     |> List.map (String.split ",")
@@ -104,7 +104,7 @@ parseCoordinates string =
     |> List.map (List.map String.toInt)
     |> List.map (List.map (Maybe.withDefault -4))
     -- |> List.map (List.map add100)
-    |> List.map (List.map add2)
+    -- |> List.map (List.map add2)
     |> List.map intListToPoint
     |> List.indexedMap pointToCoordinate
 
@@ -143,64 +143,13 @@ getShortestDistanceFromAllOtherCoordinates coordinate coordinates =
 
             distance = getDistanceBetweenCoordinates coordinate coord
             currentShortestDistance = Tuple.first acc
-            -- d1 = log "diff" ("distance: " ++ String.fromInt distance ++ ", currentShortestDistance: " ++ String.fromInt currentShortestDistance)
             targetCoordinate = Tuple.second acc
-            -- distancelog = log "distance" distance
         in
-            -- TODO: need to figure out how to do dots, this doesn't appear to be working
-            -- -- if distance == currentShortestDistance && coordinatesEqual coordinate coord == False then
-            -- if Tuple.first acc == -1 then
-            --     acc
-            -- if distance == currentShortestDistance then
-            --     -- we've got a Dodson here
-            --     (-1, coord)
             if distance < currentShortestDistance then
                 (distance, coord)
             else
                 acc) (200000, coordinate) coordinates
 
-coordinateArrayToSet : Array Coordinate -> Set String
-coordinateArrayToSet array =
-    Array.foldl (\coordinate set -> Set.insert coordinate.label set) Set.empty array
-
-getTopRowSet : Array (Array Coordinate) -> Set String
-getTopRowSet mdarray =
-    let
-        rowLength = (Array.length mdarray) - 1
-
-        firstRow =
-            Array.get 0 mdarray
-            |> Maybe.withDefault Array.empty
-            |> coordinateArrayToSet
-
-        -- firstRowlog = log "firstRow" firstRow
-
-        lastRow =
-            Array.get rowLength mdarray
-            |> Maybe.withDefault Array.empty
-            |> coordinateArrayToSet
-
-        -- lastRowlog = log "lastRow" lastRow
-
-        firstColumn =
-            Array.map (\row -> Array.get 0 row |> Maybe.withDefault getBlankCoordinate ) mdarray
-            |> coordinateArrayToSet
-
-        -- firstColumnlog = log "firstColumn" firstColumn
-
-        lastColumn =
-            Array.map (\row -> Array.get rowLength row |> Maybe.withDefault getBlankCoordinate) mdarray
-            |> coordinateArrayToSet
-        
-        -- lastColumnlog = log "lastColumn" lastColumn
-
-        mergedSet =
-            Set.foldl Set.insert firstRow lastRow
-            |> Set.foldl Set.insert firstColumn
-            |> Set.foldl Set.insert lastColumn
-
-    in
-    mergedSet
 
 -- NOTE: Return value is a bit complex and I keep forgetting so...
 -- coordinate: Coordinate in the row. 0, 0 == coordinate in that particular mdarray.
@@ -209,7 +158,6 @@ getTopRowSet mdarray =
 calculateCoordinateDistanceForRow : Array Coordinate -> Array Coordinate -> Array (Coordinate, (Int, Coordinate))
 calculateCoordinateDistanceForRow row targetCoordinates =
     Array.map (\targetCoordinate -> (targetCoordinate, getShortestDistanceFromAllOtherCoordinates targetCoordinate targetCoordinates)) row
-    -- |> Array.slice 0 600
     |> Array.map (\tuples ->
         let
             coordinate = Tuple.first tuples
@@ -217,8 +165,6 @@ calculateCoordinateDistanceForRow row targetCoordinates =
             distance = Tuple.first distanceAndTarget
             target = Tuple.second distanceAndTarget
             datEdge = coordinateTouchesEdge getRows getCols coordinate
-            -- log2 = log "coordinate" coordinate.point
-            -- log1 = log "datEdge" datEdge
         in
         if datEdge == True then
             (coordinate, (-2, target))
@@ -234,7 +180,6 @@ updateCountedCoordinateDictionary label dict =
             Just val ->
                 Just (val + 1)) dict
 
-
 coordinateTouchesEdge : Int -> Int -> Coordinate -> Bool
 coordinateTouchesEdge rowCount columnCount coordinate =
     if coordinate.point.x == 0 then
@@ -248,25 +193,47 @@ coordinateTouchesEdge rowCount columnCount coordinate =
     else
         False
 
-getInfiniteSet : Array (Coordinate, (Int, Coordinate)) -> Set String
-getInfiniteSet array =
-    -- let
-    --     log1 = log "array we got" array
-    -- in
-    
-    Array.foldl (\item acc ->
-        let
-            coordinate = Tuple.first item
-            distanceAndTarget = Tuple.second item
-            distance = Tuple.first distanceAndTarget
-            target = Tuple.second distanceAndTarget
-            -- log1 = log "distance" ((String.fromInt distance) ++ ", target.label: " ++ target.label)
-            -- D and E shouldn't be removed
-        in
-        if distance == -2 then
-            Set.insert target.label acc
-        else
-        acc) Set.empty array
+
+-- [Challenge 2 Functions] ------------------------------------------------------------
+
+getBlankCoordinate : Coordinate
+getBlankCoordinate =
+    Coordinate (Point 0 0) (PointFloat (toFloat 0) (toFloat 0)) "blank"
+
+coordinateArrayToSet : Array Coordinate -> Set String
+coordinateArrayToSet array =
+    Array.foldl (\coordinate set -> Set.insert coordinate.label set) Set.empty array
+
+-- NOTE: This function cost me days; my original was completely wrong so I borrowed what a co-worker had in Python and converted to Elm.
+getTopRowSet : Array (Array Coordinate) -> Set String
+getTopRowSet mdarray =
+    let
+        rowLength = (Array.length mdarray) - 1
+
+        firstRow =
+            Array.get 0 mdarray
+            |> Maybe.withDefault Array.empty
+            |> coordinateArrayToSet
+
+        lastRow =
+            Array.get rowLength mdarray
+            |> Maybe.withDefault Array.empty
+            |> coordinateArrayToSet
+
+        firstColumn =
+            Array.map (\row -> Array.get 0 row |> Maybe.withDefault getBlankCoordinate ) mdarray
+            |> coordinateArrayToSet
+
+        lastColumn =
+            Array.map (\row -> Array.get rowLength row |> Maybe.withDefault getBlankCoordinate) mdarray
+            |> coordinateArrayToSet
+
+        mergedSet =
+            Set.foldl Set.insert firstRow lastRow
+            |> Set.foldl Set.insert firstColumn
+            |> Set.foldl Set.insert lastColumn
+    in
+    mergedSet
 
 update : Msg -> Model -> Model
 update msg model =
@@ -292,72 +259,56 @@ update msg model =
                 coordinatesArray =
                     Array.fromList model.coordinates
 
+                -- calculate all the distances between each pixel
                 coordinates = 
                      Array.map (\row -> calculateCoordinateDistanceForRow row coordinatesArray) mdarray
 
+                -- flatten 'em
                 coordinateAndDistanceTargets =
                     coordinates
                     |> Array.foldl (\row acc ->
                         Array.foldl (\tuple deepAcc -> Array.push tuple deepAcc) acc row) Array.empty
                 
-                -- coordinateAndDistanceTargetslog = log "coordinateAndDistanceTargets" coordinateAndDistanceTargets
-                
                 -- NOTE: Below is what I'm comparing with Python's edges or "infinite"
+                -- My version simply calculated if the point was on the sides, but apparently it was super wrong, heh
                 infiniteLabels2 =
                     Array.map (\row -> Array.map (\tuple -> Tuple.second(Tuple.second tuple)) row) coordinates
                     |> getTopRowSet
-                -- infiniteLabels2log = log "infiniteLabels2" infiniteLabels2
-
-                -- I wonder, does dots that are closest to 2 or more points
-                -- count towards making it infinite?
-                infiniteLabels =
-                    getInfiniteSet coordinateAndDistanceTargets
-                    -- Set.empty
-                -- infiniteLabelslog = log "infiniteLabels" infiniteLabels
                 
+                -- filter out the the edges; if it's an edge, it's infinite, so remove all his friends
                 finiteDistanceTargets =
                     Array.filter (\item ->
                         let
                             coordinate = Tuple.first item
                             distance = Tuple.first (Tuple.second item)
                             target = Tuple.second (Tuple.second item)
-                            -- log1 = log "datmember" (Set.member target.label infiniteLabels)
                         in
-                            if Set.member target.label infiniteLabels2 || distance == -1 then
+                            if Set.member target.label infiniteLabels2 then
                                 False
                             else
                                 True) coordinateAndDistanceTargets
-                -- finiteDistanceTargetslog = log "finiteDistanceTargets" finiteDistanceTargets
-                    
-
-                -- umlog = log "coordinateAndDistanceTargets" coordinateAndDistanceTargets
-                -- finiteDistanceTargetslog = log "finiteDistanceTargets" finiteDistanceTargets
                 
                 counted = 
                     Dict.empty
                 
+                -- total up all the coordinate points, and sort by largest first
                 totals =
-                    -- coordinateAndDistanceTargets
                     finiteDistanceTargets
                     |> Array.foldl (\tuples totalSet ->
                         let
                             closestTarget = Tuple.second (Tuple.second tuples)
-                            -- log1 = log "closestTarget" closestTarget.label
                         in
                         updateCountedCoordinateDictionary closestTarget.label totalSet) counted
                     |> Dict.toList
                     |> List.sortBy Tuple.second
                     |> List.reverse
-                    -- |> Dict.fromList
-                -- totallog = log "totals" totals
 
                 biggest =
                     List.head totals
                     |> Maybe.withDefault ("??", 0)
-                biggestlog = log "biggest" biggest
 
+                -- generate tiles; this is strictly for drawing and visualizing the data
                 tiles =
-                    -- coordinateAndDistanceTargets
                     finiteDistanceTargets
                     |> Array.foldl (\tuples acc ->
                         let
@@ -365,45 +316,36 @@ update msg model =
                             target = Tuple.second (Tuple.second tuples)
                         in
                          List.append [{coordinate | label = target.label}] acc) []
-                -- tileslog = log "tiles" tiles
 
                 -- ** Challenge #2 **
                 -- Attempt #1: 210, not sure if this will work, but tired, giving a shot: too low
                 -- Attempt #2: 46054, just on a whim to test my count of all items: success! Thank God for David and Python, heh!
-                getXYString = (\coordinate -> (String.fromInt coordinate.point.x) ++ "-" ++ (String.fromInt coordinate.point.y))
-
-                coordinates2 = 
-                    Array.map (\row ->
+                
+                -- get all the regions less than 10,000
+                region = 
+                     Array.map (\row ->
                         Array.map (\coordinate ->
-                            ({ x = coordinate.point.x, y = coordinate.point.y }, Array.foldl (\coord acc -> (getDistanceBetweenCoordinates coordinate coord) + acc) 0 (Array.fromList model.coordinates))) row
+                            (coordinate.pointFloat, Array.foldl (\coord acc -> (getDistanceBetweenCoordinates coordinate coord) + acc) 0 (Array.fromList model.coordinates))) row
                         ) mdarray
                     |> Array.foldl (\row acc -> Array.append row acc) Array.empty
                     |> Array.filter (\tuple -> (Tuple.second tuple) < 10000)
-                    -- |> Array.toList
-                    -- |> List.sortBy Tuple.second
-                    |> Array.length
-                coordinates2log = log "coordinates2" coordinates2
 
+                -- largest region; I re-calculate this in the drawing code so here just for logging/debuggin
+                largestRegion = 
+                    Array.length region
+
+                biggestRegion =
+                    Array.map Tuple.first region
+                    |> Array.toList
 
             in
-            { model | tiles = tiles, totals = (Dict.fromList totals) }
+            { model | tiles = tiles, totals = (Dict.fromList totals), biggest = biggest, biggestRegion = biggestRegion }
             
         ParseCoordinatesText ->
             let
-                coordinates =
-                    parseCoordinates model.coordinatesText
-
-                -- coord1 = Coordinate (Point 233 472) (PointFloat (toFloat 233) (toFloat 472)) "a"
-                -- coord2 = Coordinate (Point 124 562) (PointFloat (toFloat 124) (toFloat 562)) "b"
-                -- dist1 = getDistanceBetweenCoordinates coord1 coord2
-                -- log1 = log "dist1" dist1 // 19, now 197, w00t w00000t
-
-                -- log1 = log "log1" (getManhattanDistance (Point 0 0) (Point 0 0)) 
-                -- log2 = log "log2" (getManhattanDistance (Point 0 0) (Point 1 0)) 
-                -- log3 = log "log3" (getManhattanDistance (Point 0 0) (Point 0 1)) 
-                -- log4 = log "log4" (getManhattanDistance (Point 0 0) (Point 1 1)) 
-                -- log5 = log "log5" (getManhattanDistance (Point 233 472) (Point 124 562)) 
-
+                -- parse the coordinates
+                coordinates = parseCoordinates model.coordinatesText
+                -- pre-calculate the labels so I can more quickly draw them later
                 labelCoordinates = getLabelCoordinates getStartX 0 coordinates
             in
             { model | coordinates = coordinates, labelCoordinates = labelCoordinates}
@@ -418,6 +360,7 @@ update msg model =
             { model | coordinatesText = unitsCache }
 
 
+-- [Drawing and UI Code] --------------------------------------------------------------------------------
 canvasBackgroundColor =
     Color.rgb 26 35 126
 
@@ -435,6 +378,15 @@ getStartX : Float
 getStartX =
     -- 20
     560
+
+getBiggestStartX : Float
+getBiggestStartX =
+    20
+
+getBiggestStartY : Float
+getBiggestStartY =
+    520
+
 
 getRowsFloat : Float
 getRowsFloat =
@@ -454,10 +406,6 @@ drawCoordinate coordinate cmds =
     cmds
     |> Canvas.fillStyle (Color.rgb 0 0 0)
     |> Canvas.fillCircle coordinate.pointFloat.x coordinate.pointFloat.y 4
-    -- |> Canvas.fillRect (coordinate.pointFloat.x - 10) (coordinate.pointFloat.y - 7) 20 14
-    -- |> Canvas.fillStyle canvasCoordinateDotColor
-    -- |> Canvas.font "14px Helvetica"
-    -- |> Canvas.fillText coordinate.label (coordinate.pointFloat.x - 8) (coordinate.pointFloat.y + 5) Nothing
 
 plotColors =
     Array.fromList [ Color.rgb 239 83 80
@@ -608,49 +556,136 @@ drawCoordinateToLabel labelCoordinates coordinates cmds =
         |> Canvas.lineTo targetX (targetY + 5)
         |> Canvas.stroke
         ) cmds coordinates
-    
+
+formatBiggest : (String, Int) -> String
+formatBiggest tuple =
+    let
+        coordinateLabel = Tuple.first tuple
+        amount = String.fromInt (Tuple.second tuple)
+        label = coordinateLabel ++ " is biggest area at " ++ amount ++ " points."
+    in
+    label
+
+drawLineFromBiggestLabelToBiggestCoordinate : Float -> Float -> String -> List Coordinate -> Commands -> Commands
+drawLineFromBiggestLabelToBiggestCoordinate x y targetLabel coordinates cmds =
+    let
+        target =
+            List.filter (\coord -> coord.label == targetLabel) coordinates
+            |> List.head
+            |> Maybe.withDefault getBlankCoordinate
+    in
+    cmds
+    |> Canvas.lineWidth 4
+    |> Canvas.strokeStyle (Color.rgb 233 30 99)
+    |> Canvas.beginPath
+    |> Canvas.moveTo x (y - 14)
+    |> Canvas.lineTo target.pointFloat.x target.pointFloat.y
+    |> Canvas.stroke
+
+drawBiggest : Float -> Float -> (String, Int) -> List Coordinate -> Commands -> Commands
+drawBiggest x y biggest coordinates cmds =
+    if Tuple.second biggest > 0 then
+        cmds
+        |> Canvas.fillStyle (Color.rgb 0 0 0)
+        |> Canvas.font "14px Helvetica"
+        |> Canvas.fillText (formatBiggest biggest) (x + 1) (y + 1) Nothing
+        |> Canvas.fillStyle (Color.rgb 255 255 255)
+        |> Canvas.font "14px Helvetica"
+        |> Canvas.fillText (formatBiggest biggest) x y Nothing
+        |> drawLineFromBiggestLabelToBiggestCoordinate x y (Tuple.first biggest) coordinates
+    else
+        cmds
+
+getCentroid : List PointFloat -> PointFloat
+getCentroid regions =
+    let
+        length = toFloat (List.length regions)
+        accPoint =
+            List.foldl (\point acc ->
+                PointFloat (acc.x + point.x) (acc.y + point.y)
+                ) (PointFloat (toFloat 0) (toFloat 0)) regions
+        centerPoint = PointFloat (accPoint.x / length) (accPoint.y / length)
+    in
+    centerPoint
+
+drawRegions : List PointFloat -> Commands -> Commands
+drawRegions regions cmds =
+    let
+        center = getCentroid regions
+    in
+    List.foldl (\point acc ->
+        acc
+        |> Canvas.fillStyle (Color.rgba 233 30 99 0.35)
+        |> Canvas.fillRect point.x point.y 1 1
+        ) cmds regions
+
+drawBiggestRegion : Float -> Float -> List PointFloat -> Commands -> Commands
+drawBiggestRegion x y regions cmds =
+    let
+        label =
+            "Largest region is " ++ String.fromInt (List.length regions) ++ " points."
+    in
+    if List.length regions > 0 then
+        cmds
+        |> Canvas.fillStyle (Color.rgb 0 0 0)
+            |> Canvas.font "14px Helvetica"
+            |> Canvas.fillText label (x + 1) (y + 20 + 1) Nothing
+            |> Canvas.fillStyle (Color.rgb 255 255 255)
+            |> Canvas.font "14px Helvetica"
+            |> Canvas.fillText label x (y + 20) Nothing
+            |> drawRegions regions
+    else
+        cmds
 
 view : Model -> Html Msg
 view model =
     div []
         [ div [ class "demo-card-wide mdl-card mdl-shadow--2dp" ]
             [ div [ class "mdl-card__title" ]
-                [ h2 [ class "mdl-card__title-text" ] [ Html.text "Day 6 - Coordinates Finder" ]
-                ]
-                , div [ class "mdl-card__supporting-text" ] [
-                    Html.text "1. click 'Load Cached'"
-                    , br [] []
-                    , Html.text "2. click 'Parse Coordinates'"
-                , form [ action "#" ]
-                    [ div [ class "mdl-textfield mdl-js-textfield", style "padding" "16px" ]
-                        [ textarea
-                            [ class "mdl-textfield__input"
-                            , rows 2
-                            , placeholder "Paste claims text here"
-                            , required True
-                            , onInput InputCoordinatesText
+                [ h2 [ class "mdl-card__title-text" ] [ Html.text "Day 6 - Coordinates Finder" ]]
+                , div[style "width" "100%"][
+                    div[class "mdl-grid"][
+                        div [class "mdl-cell mdl-cell--4-col"][
+                            div [ class "mdl-card__supporting-text" ] [
+                                Html.text "1. click 'Load Cached'"
+                                , br [] []
+                                , Html.text "2. click 'Parse Coordinates'"
+                                , br [] []
+                                , Html.text "3. click 'Calculate Coordinate Distance'" ]
+                            , form [ action "#" ]
+                                [ div [ class "mdl-textfield mdl-js-textfield", style "padding" "16px" ]
+                                    [ textarea
+                                        [ class "mdl-textfield__input"
+                                        , rows 2
+                                        , placeholder "Paste claims text here"
+                                        , required True
+                                        , onInput InputCoordinatesText
+                                        ]
+                                        [ Html.text model.coordinatesText ]
+                                    ]
+                                ]
                             ]
-                            [ Html.text model.coordinatesText ]
+                        , div [class "mdl-cell mdl-cell--6-col"][
+                        div [][
+                            Canvas.element
+                                getCols
+                                getRows
+                                [ style "width" "600px" ]
+                                ( Canvas.empty
+                                    |> Canvas.clearRect 0 0 getColsFloat getRowsFloat
+                                    |> renderBackground getColsFloat getRowsFloat
+                                    |> (\cmds -> drawTiles model.tiles model.labelColors cmds)
+                                    |> (\cmds -> List.foldl drawCoordinate cmds model.coordinates)
+                                    |> (drawLegendFromCoordinates model.labelColors (round getStartX) 0 model.coordinates model.totals)
+                                    |> drawCoordinateToLabel model.labelCoordinates model.coordinates
+                                    |> drawBiggest getBiggestStartX getBiggestStartY model.biggest model.coordinates
+                                    |> drawBiggestRegion getBiggestStartX getBiggestStartY model.biggestRegion
+                                )
+                            ]
+                        ]
+                        , div [class "mdl-cell mdl-cell--2-col"][]
                         ]
                     ]
-                    , div [][
-                        Canvas.element
-                            getCols
-                            getRows
-                            [
-                                -- style "border" "1px solid black"
-                                style "width" "600px"
-                                ]
-                            ( Canvas.empty
-                                |> Canvas.clearRect 0 0 getColsFloat getRowsFloat
-                                |> renderBackground getColsFloat getRowsFloat
-                                |> (\cmds -> drawTiles model.tiles model.labelColors cmds)
-                                |> (\cmds -> List.foldl drawCoordinate cmds model.coordinates)
-                                |> (drawLegendFromCoordinates model.labelColors (round getStartX) 0 model.coordinates model.totals)
-                                |> drawCoordinateToLabel model.labelCoordinates model.coordinates
-                            )
-                        ]
-                ]   
             , div [ class "mdl-card__actions mdl-card--border" ]
                 [ a
                     [ class "mdl-button mdl-button--colored mdl-js-button mdl-js-ripple-effect"
@@ -662,12 +697,13 @@ view model =
                     , onClick ParseCoordinatesText
                     ]
                     [ Html.text "2. Parse Coordinates" ]
-                ]
                 , a
                     [ class "mdl-button mdl-button--colored mdl-js-button mdl-js-ripple-effect"
                     , onClick CalculateCoordinateDistance
                     ]
                     [ Html.text "3. Calculate Coordinate Distance" ]
+
+                ]
                 
             ]
         ]
@@ -680,16 +716,6 @@ main =
         , view = view
         , update = update
         }
-
--- unitsCache : String
--- unitsCache =
---     """1, 1
--- 1, 6
--- 8, 3
--- 3, 4
--- 5, 5
--- 8, 9"""
-
 
 unitsCache : String
 unitsCache =
